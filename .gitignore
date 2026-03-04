@@ -1,0 +1,15 @@
+# Raw data and downloaded datasets
+non-pv-data/
+*.gpkg
+*.json
+
+# Generated outputs
+fig/
+*.csv
+*.gif
+*.png
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
