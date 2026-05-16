@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 580" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">
+  <defs>
+    <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+    <filter id="sh2" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <rect width="1100" height="580" fill="#f8fafc"/>
+
+  <text x="550" y="34" text-anchor="middle" font-size="20" font-weight="700" fill="#1e293b">
+    Module Architecture
+  </text>
+  <text x="550" y="56" text-anchor="middle" font-size="12" fill="#64748b">
+    Layers, responsibilities, and call direction
+  </text>
+
+  <!-- Layer 1: ingest -->
+  <g filter="url(#sh2)">
+    <rect x="40" y="100" width="1020" height="100" rx="10" fill="#fff7ed" stroke="#f97316" stroke-width="1.5"/>
+  </g>
+  <text x="60" y="125" font-weight="700" fill="#9a3412">Ingest layer</text>
+
+  <g filter="url(#sh2)">
+    <rect x="70" y="140" width="220" height="50" rx="8" fill="#fed7aa" stroke="#ea580c"/>
+    <text x="180" y="160" text-anchor="middle" font-weight="600">curl + xargs</text>
+    <text x="180" y="178" text-anchor="middle" font-size="11" fill="#475569">MaStR JSON pagination</text>
+  </g>
+  <g filter="url(#sh2)">
+    <rect x="320" y="140" width="220" height="50" rx="8" fill="#fed7aa" stroke="#ea580c"/>
+    <text x="430" y="160" text-anchor="middle" font-weight="600">osmfilter</text>
+    <text x="430" y="178" text-anchor="middle" font-size="11" fill="#475569">admin boundary subset</text>
+  </g>
+  <g filter="url(#sh2)">
+    <rect x="570" y="140" width="220" height="50" rx="8" fill="#fed7aa" stroke="#ea580c"/>
+    <text x="680" y="160" text-anchor="middle" font-weight="600">ogr2ogr</text>
+    <text x="680" y="178" text-anchor="middle" font-size="11" fill="#475569">OSM → GeoPackage</text>
+  </g>
+  <g filter="url(#sh2)">
+    <rect x="820" y="140" width="220" height="50" rx="8" fill="#fed7aa" stroke="#ea580c"/>
+    <text x="930" y="160" text-anchor="middle" font-weight="600">disk cache</text>
+    <text x="930" y="178" text-anchor="middle" font-size="11" fill="#475569">data-*.json · *.gpkg</text>
+  </g>
+
+  <!-- Layer 2: parse -->
+  <g filter="url(#sh2)">
+    <rect x="40" y="230" width="1020" height="110" rx="10" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  </g>
+  <text x="60" y="255" font-weight="700" fill="#1e3a8a">Parse layer · parser.py</text>
+
+  <g filter="url(#sh2)">
+    <rect x="70" y="270" width="230" height="60" rx="8" fill="#bfdbfe" stroke="#2563eb"/>
+    <text x="185" y="290" text-anchor="middle" font-weight="600">parse_dotnet_date</text>
+    <text x="185" y="308" text-anchor="middle" font-size="11" fill="#475569">/Date(ms)/ → datetime(UTC)</text>
+    <text x="185" y="322" text-anchor="middle" font-size="11" fill="#475569">tz-aware</text>
+  </g>
+  <g filter="url(#sh2)">
+    <rect x="320" y="270" width="240" height="60" rx="8" fill="#bfdbfe" stroke="#2563eb"/>
+    <text x="440" y="290" text-anchor="middle" font-weight="600">PowerPlant dataclass</text>
+    <text x="440" y="308" text-anchor="middle" font-size="11" fill="#475569">id · power · lon/lat · install/removal</text>
+    <text x="440" y="322" text-anchor="middle" font-size="11" fill="#475569">facing · tilt · installation_type</text>
+  </g>
+  <g filter="url(#sh2)">
+    <rect x="580" y="270" width="220" height="60" rx="8" fill="#bfdbfe" stroke="#2563eb"/>
+    <text x="690" y="290" text-anchor="middle" font-weight="600">from_json (match/case)</text>
+    <text x="690" y="308" text-anchor="middle" font-size="11" fill="#475569">decode 6 MaStR enums</text>
+    <text x="690" y="322" text-anchor="middle" font-size="11" fill="#475569">unknown codes → None</text>
+  </g>
+  <g filter="url(#sh2)">
+    <rect x="820" y="270" width="220" height="60" rx="8" fill="#bfdbfe" stroke="#2563eb"/>
+    <text x="930" y="290" text-anchor="middle" font-weight="600">load_data(dir)</text>
+    <text x="930" y="308" text-anchor="middle" font-size="11" fill="#475569">glob *.json · iterate</text>
+    <text x="930" y="322" text-anchor="middle" font-size="11" fill="#475569">→ list[PowerPlant]</text>
+  </g>
+
+  <!-- Layer 3: analyze -->
+  <g filter="url(#sh2)">
+    <rect x="40" y="370" width="1020" height="110" rx="10" fill="#f0fdf4" stroke="#22c55e" stroke-width="1.5"/>
+  </g>
+  <text x="60" y="395" font-weight="700" fill="#14532d">Analyze layer · wind.ipynb</text>
+
+  <g filter="url(#sh2)">
+    <rect x="70" y="410" width="220" height="60" rx="8" fill="#bbf7d0" stroke="#16a34a"/>
+    <text x="180" y="430" text-anchor="middle" font-weight="600">date filter</text>
+    <text x="180" y="448" text-anchor="middle" font-size="11" fill="#475569">installed ≤ t &lt; removed</text>
+  </g>
+  <g filter="url(#sh2)">
+    <rect x="310" y="410" width="220" height="60" rx="8" fill="#bbf7d0" stroke="#16a34a"/>
+    <text x="420" y="430" text-anchor="middle" font-weight="600">geopandas sjoin</text>
+    <text x="420" y="448" text-anchor="middle" font-size="11" fill="#475569">points → kreis polygons</text>
+  </g>
+  <g filter="url(#sh2)">
+    <rect x="550" y="410" width="220" height="60" rx="8" fill="#bbf7d0" stroke="#16a34a"/>
+    <text x="660" y="430" text-anchor="middle" font-weight="600">aggregate power</text>
+    <text x="660" y="448" text-anchor="middle" font-size="11" fill="#475569">sum kW · convert GW</text>
+  </g>
+  <g filter="url(#sh2)">
+    <rect x="790" y="410" width="220" height="60" rx="8" fill="#bbf7d0" stroke="#16a34a"/>
+    <text x="900" y="430" text-anchor="middle" font-weight="600">mapclassify Jenks</text>
+    <text x="900" y="448" text-anchor="middle" font-size="11" fill="#475569">natural-breaks bins</text>
+  </g>
+
+  <!-- Layer 4: render -->
+  <g filter="url(#sh2)">
+    <rect x="40" y="510" width="1020" height="50" rx="10" fill="#fdf2f8" stroke="#ec4899" stroke-width="1.5"/>
+  </g>
+  <text x="60" y="540" font-weight="700" fill="#831843">Render layer</text>
+  <text x="200" y="540" font-size="12" fill="#475569">matplotlib choropleth → fig/*.png</text>
+  <text x="490" y="540" font-size="12" fill="#475569">→ ffmpeg palettegen + paletteuse → wind.gif</text>
+
+  <!-- Layer arrows -->
+  <line x1="550" y1="200" x2="550" y2="228" stroke="#475569" stroke-width="2" marker-end="url(#a2)"/>
+  <line x1="550" y1="340" x2="550" y2="368" stroke="#475569" stroke-width="2" marker-end="url(#a2)"/>
+  <line x1="550" y1="480" x2="550" y2="508" stroke="#475569" stroke-width="2" marker-end="url(#a2)"/>
+</svg>

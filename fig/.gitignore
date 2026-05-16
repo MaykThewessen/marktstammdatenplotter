@@ -1,1 +1,4 @@
+# Ignore rendered frame outputs (PNG/GIF/MP4) but keep documentation SVGs.
 *
+!.gitignore
+!*.svg

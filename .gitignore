@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Marimo
+__marimo__/
+
+# Scrape outputs / OSM artifacts (regenerable)
+data-*.json
+*.o5m
+*.osm
+*.osm.pbf
+germany-latest.*
+germany_admin_levels_*.osm
+germany_kreise.gpkg
+
+# Virtual envs
+.venv/
+.env
