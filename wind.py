@@ -62,9 +62,14 @@ def _controls(date, df, mo):
         options=["viridis", "plasma", "Blues", "GnBu", "BuPu"],
         value="GnBu", label="Colormap",
     )
-    controls = mo.hstack([date_slider, location, bin_count, cmap_picker], gap=2)
+    scale_picker = mo.ui.radio(
+        options=["jenks", "linear", "log"], value="jenks", label="Color scale"
+    )
+    controls = mo.hstack(
+        [date_slider, location, bin_count, cmap_picker, scale_picker], gap=2
+    )
     controls
-    return bin_count, cmap_picker, date_slider, location
+    return bin_count, cmap_picker, date_slider, location, scale_picker
 
 
 @app.cell
@@ -79,7 +84,16 @@ def _filtered(df, location):
 
 
 @app.cell
-def _map(bin_count, cmap_picker, date_slider, mastr_plot, mo, units, w):
+def _map(
+    bin_count,
+    cmap_picker,
+    date_slider,
+    mastr_plot,
+    mo,
+    scale_picker,
+    units,
+    w,
+):
     agg, active = mastr_plot.aggregate_by_unit(
         w, units, plot_date=date_slider.value, energy_type="Wind"
     )
@@ -89,7 +103,7 @@ def _map(bin_count, cmap_picker, date_slider, mastr_plot, mo, units, w):
     fig = mastr_plot.plot_choropleth(
         agg, plot_date=date_slider.value,
         title=f"Wind capacity — {len(active):,} turbines active",
-        bins=bins, cmap=cmap_picker.value,
+        bins=bins, cmap=cmap_picker.value, scale=scale_picker.value,
     )
     mo.mpl.interactive(fig)
     return active, agg

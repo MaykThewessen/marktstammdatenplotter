@@ -64,9 +64,14 @@ def _controls(date, df, mo):
         options=["viridis", "plasma", "magma", "cividis", "YlOrRd"],
         value="YlOrRd", label="Colormap",
     )
-    controls = mo.hstack([date_slider, type_filter, bin_count, cmap_picker], gap=2)
+    scale_picker = mo.ui.radio(
+        options=["jenks", "linear", "log"], value="jenks", label="Color scale"
+    )
+    controls = mo.hstack(
+        [date_slider, type_filter, bin_count, cmap_picker, scale_picker], gap=2
+    )
     controls
-    return bin_count, cmap_picker, date_slider, type_filter
+    return bin_count, cmap_picker, date_slider, scale_picker, type_filter
 
 
 @app.cell
@@ -79,7 +84,16 @@ def _filtered(df, type_filter):
 
 
 @app.cell
-def _map(bin_count, cmap_picker, date_slider, mastr_plot, mo, pv, units):
+def _map(
+    bin_count,
+    cmap_picker,
+    date_slider,
+    mastr_plot,
+    mo,
+    pv,
+    scale_picker,
+    units,
+):
     agg, active = mastr_plot.aggregate_by_unit(
         pv, units, plot_date=date_slider.value, energy_type="Solare Strahlungsenergie"
     )
@@ -89,7 +103,7 @@ def _map(bin_count, cmap_picker, date_slider, mastr_plot, mo, pv, units):
     fig = mastr_plot.plot_choropleth(
         agg, plot_date=date_slider.value,
         title=f"PV capacity — {len(active):,} plants active",
-        bins=bins, cmap=cmap_picker.value,
+        bins=bins, cmap=cmap_picker.value, scale=scale_picker.value,
     )
     mo.mpl.interactive(fig)
     return active, agg

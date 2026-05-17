@@ -1,0 +1,110 @@
+name: Refresh docs
+
+# Weekly re-scrape of the MaStR registry, re-render of the marimo notebooks,
+# regeneration of all sample SVGs + the wind animation GIF, then commit the
+# updated artifacts back to main so GitHub Pages picks them up.
+
+on:
+  schedule:
+    # Sundays at 03:17 UTC. Picked off-the-hour to dodge cron stampedes.
+    - cron: "17 3 * * 0"
+  workflow_dispatch:
+    inputs:
+      pages_to_scrape_pv:
+        description: "Number of 25k-row pages of top-sorted PV plants to fetch"
+        default: "2"
+      pages_to_scrape_wind:
+        description: "Number of 25k-row pages of non-PV plants to fetch"
+        default: "7"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-docs
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install pixi
+        uses: prefix-dev/setup-pixi@v0.8.10
+        with:
+          pixi-version: latest
+          cache: true
+
+      - name: Resolve env
+        run: pixi install
+
+      - name: Fetch Kreis polygons
+        run: pixi run fetch-kreise
+
+      - name: Scrape MaStR (non-PV — wind, hydro, biomass…)
+        env:
+          PAGES_NON_PV: ${{ github.event.inputs.pages_to_scrape_wind || '7' }}
+        run: |
+          mkdir -p data
+          for p in $(seq 1 "${PAGES_NON_PV}"); do
+            curl --get \
+              'https://www.marktstammdatenregister.de/MaStR/Einheit/EinheitJson/GetErweiterteOeffentlicheEinheitStromerzeugung' \
+              --data-urlencode 'sort=' \
+              --data-urlencode "page=${p}" \
+              --data-urlencode 'pageSize=25000' \
+              --data-urlencode 'group=' \
+              --data-urlencode "filter=Energieträger~neq~'2495'~and~Energieträger~neq~'2496'" \
+              --data-urlencode 'forExport=true' \
+              -o "data/data-${p}.json" &
+          done
+          wait
+
+      - name: Scrape MaStR (PV top-50k)
+        env:
+          PAGES_PV: ${{ github.event.inputs.pages_to_scrape_pv || '2' }}
+        run: |
+          mkdir -p data-pv
+          for p in $(seq 1 "${PAGES_PV}"); do
+            curl --get \
+              'https://www.marktstammdatenregister.de/MaStR/Einheit/EinheitJson/GetErweiterteOeffentlicheEinheitStromerzeugung' \
+              --data-urlencode 'sort=Bruttoleistung-desc' \
+              --data-urlencode "page=${p}" \
+              --data-urlencode 'pageSize=25000' \
+              --data-urlencode 'group=' \
+              --data-urlencode "filter=Energieträger~eq~'2495'" \
+              --data-urlencode 'forExport=true' \
+              -o "data-pv/data-${p}.json" &
+          done
+          wait
+
+      - name: Re-render sample SVGs + Bundesland chart
+        run: pixi run python scripts/render_samples.py
+
+      - name: Re-render wind animation GIF
+        run: pixi run python scripts/render_wind_gif.py
+
+      - name: Rebuild per-Kreis JSON
+        run: pixi run python scripts/build_kreise_json.py
+
+      - name: Re-export marimo HTML
+        run: pixi run docs-build
+
+      - name: Commit refreshed docs
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add fig/sample-*.svg fig/wind-*.gif docs/assets/sample-*.svg \
+                  docs/assets/wind-*.gif docs/assets/kreise.json \
+                  docs/pv.html docs/wind.html || true
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Weekly refresh: re-scrape MaStR + re-render docs ($(date -u +%Y-%m-%d))"
+            git push
+          fi

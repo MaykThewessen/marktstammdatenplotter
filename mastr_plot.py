@@ -227,22 +227,47 @@ def plot_choropleth(
     title: str,
     bins: list[float] | None = None,
     cmap: str = "viridis",
+    scale: str = "jenks",
 ):
-    """Return a matplotlib Figure showing the choropleth."""
+    """Return a matplotlib Figure showing the choropleth.
+
+    `scale` selects the color-normalization strategy:
+      * ``"jenks"`` (default) — discrete Jenks-natural-breaks classes. Best for
+        skewed distributions; legend reads as bands.
+      * ``"linear"`` — continuous linear scale from 0 → max. Clearer absolute
+        comparison; less detail at the bottom of skewed distributions.
+      * ``"log"``   — symmetric-log normalization. Useful when capacity spans
+        several orders of magnitude (e.g. balcony PV vs. utility parks).
+    """
     import matplotlib.pyplot as plt
     import matplotlib.colors as mcolors
 
     fig, ax = plt.subplots(figsize=(9, 11), dpi=120)
     values = aggregated["power_gw"].to_numpy()
-    if bins is None:
-        bins = jenks_bins(values[values > 0]) if (values > 0).any() else [0.0, 1.0]
-    if len(bins) < 2:
-        bins = [0.0, max(1.0, float(values.max() or 1.0))]
-    norm = mcolors.BoundaryNorm(bins, ncolors=256)
+    vmax = float(values.max()) if values.size else 1.0
+    if vmax <= 0:
+        vmax = 1.0
+
+    if scale == "linear":
+        norm = mcolors.Normalize(vmin=0.0, vmax=vmax)
+        legend_kwds = {"label": "Capacity [GW]", "shrink": 0.6}
+    elif scale == "log":
+        # symlog handles zeros gracefully without raising
+        linthresh = max(vmax * 1e-3, 1e-4)
+        norm = mcolors.SymLogNorm(linthresh=linthresh, vmin=0.0, vmax=vmax)
+        legend_kwds = {"label": "Capacity [GW] (log)", "shrink": 0.6}
+    else:  # jenks
+        if bins is None:
+            bins = jenks_bins(values[values > 0]) if (values > 0).any() else [0.0, vmax]
+        if len(bins) < 2:
+            bins = [0.0, vmax]
+        norm = mcolors.BoundaryNorm(bins, ncolors=256)
+        legend_kwds = {"label": "Capacity [GW]", "shrink": 0.6}
+
     aggregated.plot(
         column="power_gw", ax=ax, cmap=cmap, norm=norm,
         edgecolor="white", linewidth=0.3, legend=True,
-        legend_kwds={"label": "Capacity [GW]", "shrink": 0.6},
+        legend_kwds=legend_kwds,
         missing_kwds={"color": "#eeeeee"},
     )
     ax.set_axis_off()

@@ -42,6 +42,10 @@
         <li><a href="wind.html">Wind explorer (marimo)</a></li>
         <li><a href="#notebooks">About the notebooks</a></li>
       </ul>
+      <div class="section">Data</div>
+      <ul>
+        <li><a href="#kreise-rank">Top Kreise by capacity</a></li>
+      </ul>
       <div class="section">Reference</div>
       <ul>
         <li><a href="#powerplant">PowerPlant dataclass</a></li>
@@ -354,6 +358,19 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
         </figure>
       </section>
 
+      <section id="kreise-rank">
+        <h2>Top Kreise by installed capacity</h2>
+        <p>
+          Sortable, filterable table of all 434 German Kreise (snapshot
+          2025-01-01), driven by the same MaStR scrape behind the maps above.
+          Click any column to sort; type in the filter box to search by Kreis
+          name or Bundesland. <em>PV</em> column uses the top-50 000 utility-scale
+          plants (≥ 200 kW); <em>Wind #</em> and <em>PV #</em> are turbine /
+          plant counts active at the snapshot date.
+        </p>
+        <div id="kreise-table"></div>
+      </section>
+
       <section id="powerplant">
         <h2>PowerPlant dataclass</h2>
         <p>Defined in <code>parser.py</code>. Fields after decoding:</p>
@@ -453,5 +470,6 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
 </div>
 
 <script src="assets/sidebar.js"></script>
+<script src="assets/kreise-table.js"></script>
 </body>
 </html>
