@@ -64,17 +64,18 @@ back to a synthetic demo dataset so they always render.
 
 Generated from a live scrape (May 2026) of the public Marktstammdatenregister
 API. **Wind** uses the full registry slice (42 495 turbines, every Kreis
-covered). **PV** uses a 125 000-plant sample drawn from the registry's 6.1 M
-photovoltaic plants — enough to show the spatial pattern, not the full
-installed capacity.
+covered). **PV** uses the top 50 000 utility-scale plants sorted by capacity
+(`Bruttoleistung-desc`) — every plant ≥ 200 kW, capturing ≈ 70 GW of
+installed PV (the bulk of Germany's commercial + ground-mount fleet). Rooftop
+balcony solar (the long tail of 6 M plants below 200 kW) is excluded.
 
 | | |
 |---|---|
-| ![PV map (subset)](fig/sample-pv-map.svg) | ![Wind map (full)](fig/sample-wind-map.svg) |
-| ![PV growth (subset)](fig/sample-pv-growth.svg) | ![Wind growth (full)](fig/sample-wind-growth.svg) |
+| ![PV map — top 50k](fig/sample-pv-map.svg) | ![Wind map](fig/sample-wind-map.svg) |
+| ![PV growth — top 50k](fig/sample-pv-growth.svg) | ![Wind growth](fig/sample-wind-growth.svg) |
 
 > **2025-01-01 snapshot · real data:** 31 404 wind turbines active, 63 GW total
-> installed. PV subset shows 3.5 GW across 125 k plants (~0.7 % of registry).
+> installed. PV map covers the 50 000 plants ≥ 200 kW — 68.8 GW combined.
 
 ---
 
@@ -143,12 +144,14 @@ The API returns 25 000 rows per page, so a full pull is ~245 pages and ≈24 GB
 of JSON — usually not what you want. Two practical scopes:
 
 ```bash
-# (1) "Sample" — first 5 pages = 125 k plants (~500 MB).
-#     Good enough to show spatial pattern, not full installed capacity.
+# "Top-N by capacity" — 50 k largest plants (~200 MB).
+# Sort = Bruttoleistung-desc puts the 200 MW utility parks first; page 2
+# bottoms out around 200 kW. Captures ~70 GW = bulk of Germany's PV fleet,
+# without the 6 M rooftop/balcony long tail.
 mkdir -p data-pv
-seq 5 | xargs -P 4 -I{} curl --get \
+seq 2 | xargs -P 2 -I{} curl --get \
   'https://www.marktstammdatenregister.de/MaStR/Einheit/EinheitJson/GetErweiterteOeffentlicheEinheitStromerzeugung' \
-  --data-urlencode 'sort=' \
+  --data-urlencode 'sort=Bruttoleistung-desc' \
   --data-urlencode 'page={}' \
   --data-urlencode 'pageSize=25000' \
   --data-urlencode 'group=' \

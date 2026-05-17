@@ -316,9 +316,9 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
         <p>
           Generated from a May 2026 scrape of the public Marktstammdatenregister
           API. <b>Wind</b> uses the full registry slice — 42 495 turbines, every
-          Kreis covered. <b>PV</b> uses a 125 000-plant sample drawn from the
-          registry's 6.1 M photovoltaic plants (about 0.7 %) — enough to surface
-          the spatial pattern, not the full installed capacity.
+          Kreis covered. <b>PV</b> uses the top 50 000 utility-scale plants
+          sorted by capacity (every plant ≥ 200 kW, ≈ 70 GW combined),
+          excluding the long tail of 6 M rooftop and balcony installations.
         </p>
 
         <figure>
@@ -332,13 +332,13 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
         </figure>
 
         <figure>
-          <object type="image/svg+xml" data="assets/sample-pv-map.svg" aria-label="PV choropleth (125k-plant sample)"></object>
-          <figcaption>Figure 7 — PV capacity per Kreis, 125 000-plant sample of the registry.</figcaption>
+          <object type="image/svg+xml" data="assets/sample-pv-map.svg" aria-label="PV choropleth (top 50k by capacity)"></object>
+          <figcaption>Figure 7 — PV capacity per Kreis, top 50 000 plants ≥ 200 kW (≈ 70 GW).</figcaption>
         </figure>
 
         <figure>
-          <object type="image/svg+xml" data="assets/sample-pv-growth.svg" aria-label="Cumulative PV growth (sample)"></object>
-          <figcaption>Figure 8 — Cumulative PV capacity over time, 125 000-plant sample.</figcaption>
+          <object type="image/svg+xml" data="assets/sample-pv-growth.svg" aria-label="Cumulative PV growth (top 50k)"></object>
+          <figcaption>Figure 8 — Cumulative PV capacity over time, top 50 000 plants ≥ 200 kW.</figcaption>
         </figure>
       </section>
 
