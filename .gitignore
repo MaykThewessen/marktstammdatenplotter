@@ -11,6 +11,9 @@ __pycache__/
 # Marimo
 __marimo__/
 
+# Per-frame PNG dumps (regenerable from notebooks)
+fig/frames/
+
 # Scrape outputs / OSM artifacts (regenerable)
 data-*.json
 *.o5m

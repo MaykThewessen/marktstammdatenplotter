@@ -3,6 +3,11 @@
 > Animated choropleth maps of installed wind & solar capacity in Germany,
 > driven by data scraped from the public Marktstammdatenregister (MaStR).
 
+![Wind capacity 2005→2025](fig/wind-2005-2025.gif)
+
+*Installed wind capacity per Kreis, 2005 → 2025. 21 yearly frames from the live
+registry (42 495 turbines, fixed Jenks bins so colors stay comparable).*
+
 [![Docs](https://img.shields.io/badge/docs-github.io-blue)](https://maykthewessen.github.io/marktstammdatenplotter/)
 [![Python](https://img.shields.io/badge/python-3.11+-blue)](https://www.python.org/)
 [![Data](https://img.shields.io/badge/source-MaStR-orange)](https://www.marktstammdatenregister.de/)
@@ -76,6 +81,14 @@ balcony solar (the long tail of 6 M plants below 200 kW) is excluded.
 
 > **2025-01-01 snapshot · real data:** 31 404 wind turbines active, 63 GW total
 > installed. PV map covers the 50 000 plants ≥ 200 kW — 68.8 GW combined.
+
+### Installed capacity by Bundesland
+
+![By Bundesland](fig/sample-by-bundesland.svg)
+
+Niedersachsen leads onshore wind (12.7 GW). Bayern leads utility-scale PV
+(12.0 GW). Schleswig-Holstein and Brandenburg both top 8 GW wind. The five
+biggest Bundesländer carry ~70 % of national capacity.
 
 ---
 
@@ -253,6 +266,7 @@ the GIF loops. Drop `-loop 0` if you want a one-shot.
 |------------|---------|
 | `parser.py` | `PowerPlant` dataclass + JSON-to-record decoder |
 | `mastr_plot.py` | Shared helpers (load, aggregate, choropleth) + synthetic demo data |
+| `pixi.toml` | Reproducible env: `pixi install` then `pixi run pv-edit` / `wind-edit` / `docs-build` |
 | `pv.py` | Marimo notebook — interactive PV explorer |
 | `wind.py` | Marimo notebook — interactive wind explorer |
 | `wind.ipynb` | Original Jupyter notebook: load → join → plot → save frames |

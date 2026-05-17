@@ -1,4 +1,5 @@
-# Ignore rendered frame outputs (PNG/GIF/MP4) but keep documentation SVGs.
+# Ignore rendered PNG/MP4 outputs but keep documentation SVGs + curated GIFs.
 *
 !.gitignore
 !*.svg
+!wind-*.gif
