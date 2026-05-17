@@ -3,10 +3,13 @@
 > Animated choropleth maps of installed wind & solar capacity in Germany,
 > driven by data scraped from the public Marktstammdatenregister (MaStR).
 
-![Wind capacity 2005→2025](fig/wind-2005-2025.gif)
+| Wind | PV (≥ 49 kW) |
+|---|---|
+| ![Wind capacity 2005→2025](fig/wind-2005-2025.gif) | ![PV capacity 2005→2025](fig/pv-2005-2025.gif) |
 
-*Installed wind capacity per Kreis, 2005 → 2025. 21 yearly frames from the live
-registry (42 495 turbines, fixed Jenks bins so colors stay comparable).*
+*Installed wind (left, 42 495 turbines / 63 GW) and PV (right, top 200 000
+plants ≥ 49 kW / 58 GW) capacity per Kreis, 2005 → 2025. 21 yearly frames from
+the live registry, fixed Jenks bins so colors stay comparable across years.*
 
 [![Docs](https://img.shields.io/badge/docs-github.io-blue)](https://maykthewessen.github.io/marktstammdatenplotter/)
 [![Python](https://img.shields.io/badge/python-3.11+-blue)](https://www.python.org/)

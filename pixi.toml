@@ -39,7 +39,7 @@ done; wait
 
 scrape-pv-top = """
 mkdir -p data-pv && \
-for p in 1 2; do \
+for p in 1 2 3 4 5 6 7 8; do \
   curl --get 'https://www.marktstammdatenregister.de/MaStR/Einheit/EinheitJson/GetErweiterteOeffentlicheEinheitStromerzeugung' \
     --data-urlencode 'sort=Bruttoleistung-desc' \
     --data-urlencode "page=$p" \
@@ -70,3 +70,14 @@ docs-build = """
 python -m marimo export html pv.py   -o docs/pv.html && \
 python -m marimo export html wind.py -o docs/wind.html
 """
+
+# Re-render all sample SVGs + Bundesland + operators + offshore charts.
+render-samples = "python scripts/render_samples.py"
+
+# Re-render multi-year animation GIFs. Pass wind | pv | both (default both).
+render-gifs   = "python scripts/render_wind_gif.py both"
+render-wind   = "python scripts/render_wind_gif.py wind"
+render-pv     = "python scripts/render_wind_gif.py pv"
+
+# Rebuild the per-Kreis JSON that drives the sortable docs table.
+build-kreise  = "python scripts/build_kreise_json.py"

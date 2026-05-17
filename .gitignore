@@ -13,6 +13,7 @@ __marimo__/
 
 # Per-frame PNG dumps (regenerable from notebooks)
 fig/frames/
+fig/frames-pv/
 
 # Scrape outputs / OSM artifacts (regenerable)
 data-*.json
