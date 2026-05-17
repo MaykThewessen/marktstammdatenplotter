@@ -167,6 +167,101 @@ def render_offshore_chart(records, out_name, top_n: int = 25):
     plt.close(fig)
 
 
+def render_energy_mix(records, out_name):
+    active = records[
+        (records["install_date"] <= SNAP)
+        & (records["removal_date"].isna() | (records["removal_date"] > SNAP))
+    ]
+    mix = (
+        active.groupby("energy_type")["power"]
+              .agg(gw=lambda s: s.sum() / 1e6, count="size")
+              .sort_values("gw")
+    )
+    top_n = 8
+    top = mix.tail(top_n).copy()
+    rest = mix.iloc[:-top_n]
+    if len(rest):
+        top.loc["Andere (" + str(len(rest)) + " Typen)"] = [
+            float(rest["gw"].sum()), int(rest["count"].sum()),
+        ]
+    top = top.sort_values("gw")
+
+    colors_map = {
+        "Wind": "#0ea5e9",
+        "Solare Strahlungsenergie": "#f59e0b",
+        "Biomasse": "#84cc16",
+        "Wasser": "#06b6d4",
+        "Erdgas": "#6b7280",
+        "Steinkohle": "#1f2937",
+        "Braunkohle": "#52525b",
+        "Mineralölprodukte": "#7c2d12",
+        "Kernenergie": "#a855f7",
+        "Geothermie": "#dc2626",
+    }
+    fig, ax = plt.subplots(figsize=(10, 5.5), dpi=120)
+    y = range(len(top))
+    ax.barh(y, top["gw"], color=[colors_map.get(n, "#94a3b8") for n in top.index],
+            edgecolor="#1e293b", linewidth=0.4)
+    for i, (gw, n) in enumerate(zip(top["gw"], top["count"])):
+        ax.text(gw + 0.5, i, f"{int(n):,} plants", va="center", fontsize=9, color="#475569")
+    ax.set_yticks(list(y))
+    ax.set_yticklabels(top.index)
+    ax.set_xlabel("Installed capacity [GW]")
+    ax.set_title(
+        f"MaStR energy-type mix — installed capacity at {SNAP.date()}\n"
+        f"(snapshot of {len(records):,} plants in this scrape · "
+        f"PV slice is top 200 k)"
+    )
+    ax.grid(axis="x", alpha=0.3)
+    fig.tight_layout()
+    for d in (FIG, DOCS):
+        fig.savefig(d / out_name, format="svg", bbox_inches="tight")
+    plt.close(fig)
+
+
+def render_yoy_additions(records, units, out_name, year: int = 2024):
+    import matplotlib.colors as mcolors
+
+    y0 = pd.Timestamp(f"{year}-01-01")
+    y1 = pd.Timestamp(f"{year}-12-31")
+    added = records[
+        (records["install_date"] >= y0) & (records["install_date"] <= y1)
+        & records["energy_type"].isin(["Wind", "Solare Strahlungsenergie"])
+    ].copy()
+
+    pts = gpd.GeoDataFrame(
+        added,
+        geometry=gpd.points_from_xy(added["longitude"], added["latitude"], crs="EPSG:4326"),
+    )
+    j = gpd.sjoin(pts, units[["name", "geometry"]], predicate="within", how="left")
+    agg = j.groupby("index_right")["power"].sum() / 1e3  # kW → MW
+    geo = units.copy()
+    geo["mw_added"] = geo.index.map(agg).astype(float).fillna(0.0)
+
+    bins = mastr_plot.jenks_bins(geo["mw_added"][geo["mw_added"] > 0].to_numpy(), k=7)
+    if len(bins) < 2:
+        bins = [0.0, max(1.0, float(geo["mw_added"].max() or 1.0))]
+    norm = mcolors.BoundaryNorm(bins, ncolors=256)
+
+    fig, ax = plt.subplots(figsize=(9, 11), dpi=120)
+    geo.plot(
+        column="mw_added", ax=ax, cmap="RdPu", norm=norm,
+        edgecolor="white", linewidth=0.3, legend=True,
+        legend_kwds={"label": f"New capacity {year} [MW]", "shrink": 0.6},
+        missing_kwds={"color": "#eeeeee"},
+    )
+    ax.set_axis_off()
+    ax.set_title(
+        f"Capacity added during {year} per Kreis\n"
+        f"(Wind + PV ≥49 kW from this scrape · {round(geo['mw_added'].sum() / 1e3, 1)} GW total)",
+        fontsize=13,
+    )
+    fig.tight_layout()
+    for d in (FIG, DOCS):
+        fig.savefig(d / out_name, format="svg", bbox_inches="tight")
+    plt.close(fig)
+
+
 def render_bundesland_chart(records, units, out_name):
     def state_totals(sub):
         active = sub[
@@ -237,6 +332,8 @@ def main():
     render_bundesland_chart(records, units, "sample-by-bundesland.svg")
     render_top_operators(records, "sample-top-operators.svg")
     render_offshore_chart(records, "sample-offshore-windparks.svg")
+    render_energy_mix(records, "sample-energy-mix.svg")
+    render_yoy_additions(records, units, "sample-2024-additions.svg", year=2024)
     print("Sample renders complete.")
 
 

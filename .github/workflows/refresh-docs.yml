@@ -92,6 +92,12 @@ jobs:
       - name: Rebuild per-Kreis JSON
         run: pixi run python scripts/build_kreise_json.py
 
+      - name: Build bulk-download artefacts
+        run: pixi run python scripts/build_downloads.py
+
+      - name: Run unit tests
+        run: pixi run test
+
       - name: Re-export marimo HTML
         run: pixi run docs-build
 
@@ -103,6 +109,7 @@ jobs:
                   docs/assets/sample-*.svg \
                   docs/assets/wind-*.gif docs/assets/pv-*.gif \
                   docs/assets/kreise.json \
+                  docs/data/*.parquet docs/data/*.csv.gz \
                   docs/pv.html docs/wind.html || true
           if git diff --cached --quiet; then
             echo "No changes to commit."

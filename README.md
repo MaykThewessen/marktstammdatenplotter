@@ -110,6 +110,22 @@ and Ørsted at the top.
 anonymises offshore coordinates, so this chart groups by operator instead of
 mapping individual turbines.
 
+### Energy-type mix
+
+![Energy mix](fig/sample-energy-mix.svg)
+
+All registered electricity-generating units in this scrape, by `Energietraeger`.
+Coal (Braunkohle + Steinkohle, 31 GW) still rivals utility-scale PV (58 GW).
+Erdgas (36 GW) carries most of the peaking load.
+
+### Capacity added during 2024
+
+![2024 additions](fig/sample-2024-additions.svg)
+
+Where Germany actually installed new wind + PV (≥ 49 kW) during 2024 — 13.4 GW
+in this scrape. Leipziger Land alone added 565 MW (utility solar in the
+former-lignite belt).
+
 ---
 
 ## Quickstart
@@ -293,6 +309,10 @@ the GIF loops. Drop `-loop 0` if you want a one-shot.
 | `fig/` | Rendered PNG/GIF outputs (gitignored), plus pipeline + sample SVGs |
 | `docs/` | Read-the-Docs–style site published at [maykthewessen.github.io/marktstammdatenplotter](https://maykthewessen.github.io/marktstammdatenplotter/) |
 | `CLAUDE.md` | Conventions for Claude Code agents |
+| `CITATION.cff` | Citation metadata for the software + upstream datasets |
+| `tests/` | `pytest` suite covering `parser.py` enum decoders (52 tests) |
+| `scripts/` | CI helpers: `render_samples.py`, `render_wind_gif.py`, `build_kreise_json.py`, `build_downloads.py` |
+| `docs/data/` | Bulk downloads — `mastr-snapshot.parquet` + CSV.gz mirrors |
 
 ---
 
