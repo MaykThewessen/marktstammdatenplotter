@@ -60,12 +60,21 @@ python -m marimo export html pv.py -o docs/pv.html
 When no `data-*.json` or `germany_kreise.gpkg` are present, both notebooks fall
 back to a synthetic demo dataset so they always render.
 
-### Sample renders (demo data)
+### Sample renders (real MaStR data)
+
+Generated from a live scrape (May 2026) of the public Marktstammdatenregister
+API. **Wind** uses the full registry slice (42 495 turbines, every Kreis
+covered). **PV** uses a 125 000-plant sample drawn from the registry's 6.1 M
+photovoltaic plants — enough to show the spatial pattern, not the full
+installed capacity.
 
 | | |
 |---|---|
-| ![PV map](fig/sample-pv-map.svg) | ![Wind map](fig/sample-wind-map.svg) |
-| ![PV growth](fig/sample-pv-growth.svg) | ![Wind growth](fig/sample-wind-growth.svg) |
+| ![PV map (subset)](fig/sample-pv-map.svg) | ![Wind map (full)](fig/sample-wind-map.svg) |
+| ![PV growth (subset)](fig/sample-pv-growth.svg) | ![Wind growth (full)](fig/sample-wind-growth.svg) |
+
+> **2025-01-01 snapshot · real data:** 31 404 wind turbines active, 63 GW total
+> installed. PV subset shows 3.5 GW across 125 k plants (~0.7 % of registry).
 
 ---
 
@@ -123,8 +132,35 @@ seq 7 | xargs -P 4 -I{} curl --get \
   --data-urlencode 'forExport=true' -o data-{}.json
 ```
 
-The `filter` excludes two Energieträger codes (2495, 2496) — adjust if you want
-to keep them. Rate limit yourself; the API gets slow under heavy load.
+The `filter` excludes two Energieträger codes (2495, 2496) — both PV — so the
+default scrape covers wind, biomass, hydro, gas, etc. ~169 k rows. Rate-limit
+yourself; the API gets slow under heavy load.
+
+### Scraping PV separately
+
+The PV slice of the registry holds **6.1 M plants** (rooftop, balcony, ground).
+The API returns 25 000 rows per page, so a full pull is ~245 pages and ≈24 GB
+of JSON — usually not what you want. Two practical scopes:
+
+```bash
+# (1) "Sample" — first 5 pages = 125 k plants (~500 MB).
+#     Good enough to show spatial pattern, not full installed capacity.
+mkdir -p data-pv
+seq 5 | xargs -P 4 -I{} curl --get \
+  'https://www.marktstammdatenregister.de/MaStR/Einheit/EinheitJson/GetErweiterteOeffentlicheEinheitStromerzeugung' \
+  --data-urlencode 'sort=' \
+  --data-urlencode 'page={}' \
+  --data-urlencode 'pageSize=25000' \
+  --data-urlencode 'group=' \
+  --data-urlencode "filter=Energieträger~eq~'2495'" \
+  --data-urlencode 'forExport=true' \
+  -o data-pv/data-{}.json
+```
+
+> **Filter quirk** — MaStR silently drops the second clause when ANDed with a
+> different field, e.g. `Energieträger~eq~'2495'~and~ArtDerSolaranlageId~eq~'852'`
+> returns the same row count as `Energieträger~eq~'2495'` alone. Filter
+> client-side after loading if you need a narrower slice.
 
 ### Decoding the rows
 

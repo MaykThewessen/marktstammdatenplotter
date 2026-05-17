@@ -22,6 +22,7 @@ import parser as mastr_parser
 REPO_ROOT = Path(__file__).resolve().parent
 DEFAULT_DATA_DIRS = [
     REPO_ROOT / "data",
+    REPO_ROOT / "data-pv",
     REPO_ROOT.parent / "non-pv-data",
     REPO_ROOT / "non-pv-data",
 ]
@@ -36,6 +37,11 @@ def find_data_dir() -> Path | None:
         if candidate.exists() and any(candidate.glob("*.json")):
             return candidate
     return None
+
+
+def find_data_dirs() -> list[Path]:
+    """All default dirs that contain *.json scrapes."""
+    return [c for c in DEFAULT_DATA_DIRS if c.exists() and any(c.glob("*.json"))]
 
 
 def find_gpkg() -> Path | None:
@@ -112,15 +118,25 @@ def load_records(data_dir: Path | None = None, demo_if_missing: bool = True) -> 
     """Load records as a DataFrame.
 
     Returns (df, is_demo). When `is_demo` is True the rows are synthetic.
+
+    If `data_dir` is None, all default dirs that hold *.json scrapes are merged
+    so a single DataFrame contains wind + PV when both have been scraped.
     """
-    chosen = Path(data_dir) if data_dir else find_data_dir()
-    if chosen is None:
+    if data_dir is not None:
+        dirs = [Path(data_dir)]
+    else:
+        dirs = find_data_dirs()
+    if not dirs:
         if not demo_if_missing:
             raise FileNotFoundError("No data-*.json files found in any default location.")
         return _synthetic_records(), True
 
-    records = mastr_parser.load_data(str(chosen))
-    df = pd.DataFrame([r.__dict__ for r in records])
+    frames = []
+    for d in dirs:
+        records = mastr_parser.load_data(str(d))
+        if records:
+            frames.append(pd.DataFrame([r.__dict__ for r in records]))
+    df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
     df["install_date"] = pd.to_datetime(df["install_date"]).dt.tz_localize(None)
     df["removal_date"] = pd.to_datetime(df["removal_date"]).dt.tz_localize(None)
     return df, False

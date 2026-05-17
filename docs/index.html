@@ -312,26 +312,33 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
           top of each notebook tells you which mode is active.
         </div>
 
-        <h3>Sample renders (demo data)</h3>
+        <h3>Sample renders (real MaStR data)</h3>
+        <p>
+          Generated from a May 2026 scrape of the public Marktstammdatenregister
+          API. <b>Wind</b> uses the full registry slice — 42 495 turbines, every
+          Kreis covered. <b>PV</b> uses a 125 000-plant sample drawn from the
+          registry's 6.1 M photovoltaic plants (about 0.7 %) — enough to surface
+          the spatial pattern, not the full installed capacity.
+        </p>
 
         <figure>
-          <object type="image/svg+xml" data="assets/sample-pv-map.svg" aria-label="PV choropleth (demo)"></object>
-          <figcaption>Figure 5 — PV explorer output, demo dataset.</figcaption>
+          <object type="image/svg+xml" data="assets/sample-wind-map.svg" aria-label="Wind choropleth (real data)"></object>
+          <figcaption>Figure 5 — Installed wind capacity per Kreis, 2025-01-01 (31 404 turbines, 63 GW total).</figcaption>
         </figure>
 
         <figure>
-          <object type="image/svg+xml" data="assets/sample-pv-growth.svg" aria-label="Cumulative PV growth (demo)"></object>
-          <figcaption>Figure 6 — Cumulative PV capacity over time, demo dataset.</figcaption>
+          <object type="image/svg+xml" data="assets/sample-wind-growth.svg" aria-label="Cumulative wind growth (real data)"></object>
+          <figcaption>Figure 6 — Cumulative wind capacity in Germany, onshore vs. offshore (real registry).</figcaption>
         </figure>
 
         <figure>
-          <object type="image/svg+xml" data="assets/sample-wind-map.svg" aria-label="Wind choropleth (demo)"></object>
-          <figcaption>Figure 7 — Wind explorer output, demo dataset.</figcaption>
+          <object type="image/svg+xml" data="assets/sample-pv-map.svg" aria-label="PV choropleth (125k-plant sample)"></object>
+          <figcaption>Figure 7 — PV capacity per Kreis, 125 000-plant sample of the registry.</figcaption>
         </figure>
 
         <figure>
-          <object type="image/svg+xml" data="assets/sample-wind-growth.svg" aria-label="Cumulative wind growth (demo)"></object>
-          <figcaption>Figure 8 — Cumulative wind capacity, onshore vs. offshore (demo).</figcaption>
+          <object type="image/svg+xml" data="assets/sample-pv-growth.svg" aria-label="Cumulative PV growth (sample)"></object>
+          <figcaption>Figure 8 — Cumulative PV capacity over time, 125 000-plant sample.</figcaption>
         </figure>
       </section>
 
