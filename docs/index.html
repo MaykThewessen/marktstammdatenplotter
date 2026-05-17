@@ -4,9 +4,29 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Marktstammdatenplotter — Documentation</title>
-<meta name="description" content="Animated choropleth maps of German wind & solar capacity from the Marktstammdatenregister.">
+<meta name="description" content="Animated choropleth maps of German wind & solar capacity from the Marktstammdatenregister (MaStR).">
+<meta name="author" content="Mayk Thewessen">
+<meta name="theme-color" content="#2980b9">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Marktstammdatenplotter — German wind & PV capacity maps">
+<meta property="og:description" content="Interactive choropleth maps + animated GIFs of installed wind and solar capacity per Kreis, live from the Marktstammdatenregister.">
+<meta property="og:url" content="https://maykthewessen.github.io/marktstammdatenplotter/">
+<meta property="og:image" content="https://maykthewessen.github.io/marktstammdatenplotter/assets/wind-2005-2025.gif">
+<meta property="og:image:alt" content="Animated map of installed wind capacity in Germany, 2005 to 2025">
+<meta property="og:site_name" content="Marktstammdatenplotter">
+
+<!-- Twitter / X -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Marktstammdatenplotter">
+<meta name="twitter:description" content="Wind & PV capacity per Kreis, live from MaStR.">
+<meta name="twitter:image" content="https://maykthewessen.github.io/marktstammdatenplotter/assets/wind-2005-2025.gif">
+
+<link rel="canonical" href="https://maykthewessen.github.io/marktstammdatenplotter/">
 <link rel="stylesheet" href="assets/style.css">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%232980b9'/%3E%3Ctext x='8' y='12' text-anchor='middle' font-family='sans-serif' font-size='10' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="alternate icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%232980b9'/%3E%3Ctext x='8' y='12' text-anchor='middle' font-family='sans-serif' font-size='10' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E">
 </head>
 <body>
 <button class="menu-toggle" aria-label="Toggle navigation">☰ Menu</button>
@@ -45,6 +65,8 @@
       <div class="section">Data</div>
       <ul>
         <li><a href="#kreise-rank">Top Kreise by capacity</a></li>
+        <li><a href="#operators">Top operators</a></li>
+        <li><a href="#offshore">Offshore wind</a></li>
       </ul>
       <div class="section">Reference</div>
       <ul>
@@ -355,6 +377,36 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
         <figure>
           <img src="assets/wind-2005-2025.gif" alt="Wind capacity 2005-2025 animation" style="max-width:100%;border:1px solid var(--rtd-border);border-radius:4px;background:#fff;">
           <figcaption>Figure 10 — Yearly frames of installed wind capacity per Kreis, 2005 → 2025 (300 KB GIF, fixed Jenks bins).</figcaption>
+        </figure>
+      </section>
+
+      <section id="operators">
+        <h2>Top operators</h2>
+        <p>
+          Top 30 owners by combined wind + utility-scale PV capacity, snapshot
+          2025-01-01. Names are normalised (legal-form suffixes stripped) but
+          not consolidated across parent companies — most offshore wind farms
+          appear as standalone project vehicles, which is why the top of the
+          chart is dominated by single-farm LLCs rather than utilities.
+        </p>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-top-operators.svg" aria-label="Top 30 operators"></object>
+          <figcaption>Figure 11 — Top 30 operators · Wind (blue) + PV ≥ 200 kW (orange).</figcaption>
+        </figure>
+      </section>
+
+      <section id="offshore">
+        <h2>Offshore wind</h2>
+        <p>
+          Germany's offshore wind fleet at 2025-01-01: 1 637 turbines, 9.2 GW
+          total — 7.4 GW in the Nordsee, 1.8 GW in the Ostsee. Coordinates in
+          MaStR are anonymised for offshore (<code>StandortAnonymisiert</code>
+          starts with "Nordsee" or "Ostsee"), so we group by operator
+          rather than placing turbines on a map.
+        </p>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-offshore-windparks.svg" aria-label="Top offshore wind operators"></object>
+          <figcaption>Figure 12 — Top 25 offshore wind operators by installed capacity, colored by sea.</figcaption>
         </figure>
       </section>
 

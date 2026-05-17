@@ -90,6 +90,23 @@ Niedersachsen leads onshore wind (12.7 GW). Bayern leads utility-scale PV
 (12.0 GW). Schleswig-Holstein and Brandenburg both top 8 GW wind. The five
 biggest Bundesländer carry ~70 % of national capacity.
 
+### Who owns Germany's grid?
+
+![Top operators](fig/sample-top-operators.svg)
+
+Top 30 by combined wind + PV. Offshore project vehicles dominate the very top
+(DanTysk Sandbank, EnBW Hohe See, Baltic Eagle, Borkum Riffgrund 2…) because
+every farm is its own LLC. Consolidating by parent would put RWE, Iberdrola
+and Ørsted at the top.
+
+### Offshore wind detail
+
+![Offshore wind farms](fig/sample-offshore-windparks.svg)
+
+1 637 turbines / 9.2 GW offshore — 7.4 GW Nordsee + 1.8 GW Ostsee. MaStR
+anonymises offshore coordinates, so this chart groups by operator instead of
+mapping individual turbines.
+
 ---
 
 ## Quickstart
