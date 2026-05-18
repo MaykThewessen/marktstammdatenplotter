@@ -67,6 +67,8 @@
         <li><a href="#energy-mix">Energy-type mix</a></li>
         <li><a href="#state-ramp">Build-out per Bundesland</a></li>
         <li><a href="#pv-by-type">PV by installation type</a></li>
+        <li><a href="#pv-orientation">PV orientation</a></li>
+        <li><a href="#wind-age">Wind fleet age</a></li>
         <li><a href="#density">Capacity density (MW/km²)</a></li>
         <li><a href="#yoy-additions">2024 additions</a></li>
         <li><a href="#largest-plants">Largest individual plants</a></li>
@@ -434,6 +436,43 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
         <figure>
           <object type="image/svg+xml" data="assets/sample-pv-by-type.svg" aria-label="PV by installation type"></object>
           <figcaption>Figure 17 — Cumulative PV by installation type + pie of latest share.</figcaption>
+        </figure>
+      </section>
+
+      <section id="pv-orientation">
+        <h2>PV orientation</h2>
+        <p>
+          Capacity-weighted distribution of panel facing + tilt across the
+          top 200 k PV plants. South-facing dominates at <b>~ 62 %</b> of
+          installed capacity; east-west flat-mount (a utility-park staple)
+          is the strong second at <b>14 %</b>. Trackers stay rare — only
+          <b>0.5 GW</b> of the captured fleet. Most plants tilt 0–19° (flat,
+          utility-park footprints).
+        </p>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-pv-orientation.svg" aria-label="PV orientation"></object>
+          <figcaption>Figure 20 — PV capacity by panel orientation (pie) and tilt angle (bar).</figcaption>
+        </figure>
+      </section>
+
+      <section id="wind-age">
+        <h2>Wind fleet age + repowering signal</h2>
+        <p>
+          Top panel: installed MW per commission year (blue) vs.
+          decommissioned MW per removal year (red, plotted below the
+          axis). The decommission wave kicks in around 2019 as the
+          first big EEG cohort reaches its 20-year payback boundary —
+          ~ 0.6 → 0.75 GW removed each year since 2023.
+        </p>
+        <p>
+          Bottom panel: mean per-turbine rotor MW by commission year.
+          The fleet has upsized from ~ 0.5 MW per turbine in the late
+          90s to ~ 7 MW in 2025 — a <b>15× growth</b> at the unit level,
+          driven by the new offshore 15 MW class.
+        </p>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-wind-age.svg" aria-label="Wind fleet age + upsizing"></object>
+          <figcaption>Figure 21 — German wind: installs vs. decommissions per year, plus turbine-MW upsizing trend.</figcaption>
         </figure>
       </section>
 

@@ -122,6 +122,22 @@ All registered electricity-generating units in this scrape, by `Energietraeger`.
 Coal (Braunkohle + Steinkohle, 31 GW) still rivals utility-scale PV (58 GW).
 Erdgas (36 GW) carries most of the peaking load.
 
+### PV orientation
+
+![PV orientation](fig/sample-pv-orientation.svg)
+
+South-facing dominates at 62 % of installed PV; east-west flat-mount (utility
+parks) is the strong second at 14 %. Trackers stay rare — only 0.5 GW. Most
+plants tilt 0–19° (flat utility footprints).
+
+### Wind fleet age + repowering
+
+![Wind age](fig/sample-wind-age.svg)
+
+Decommission wave from 2019 onwards: first EEG cohort reaching its 20-year
+boundary. Mean per-turbine MW has grown 15× since the late 90s (0.5 → 7 MW),
+driven by the new 15 MW offshore class.
+
 ### Capacity density (MW per km²)
 
 Absolute capacity makes large rural Kreise look more impressive than they
@@ -347,6 +363,8 @@ the GIF loops. Drop `-loop 0` if you want a one-shot.
 | `tests/` | `pytest` suite covering `parser.py` enum decoders (52 tests) |
 | `scripts/` | CI helpers: `render_samples.py`, `render_wind_gif.py`, `build_kreise_json.py`, `build_downloads.py` |
 | `docs/data/` | Bulk downloads — `mastr-snapshot.parquet` + CSV.gz mirrors |
+| `CHANGELOG.md` | Notable changes per version (Keep-a-Changelog format) |
+| `CONTRIBUTING.md` | How to add a chart / parser enum, style + commit rules |
 
 ---
 

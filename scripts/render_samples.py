@@ -333,6 +333,130 @@ def export_largest_plants(records, units, out_name, top_n: int = 10):
     (DOCS / out_name).write_text(json.dumps(records_out, indent=2))
 
 
+def render_pv_orientation(records, out_name):
+    """Capacity-weighted distribution of facing + tilt across PV plants."""
+    pv = records[records["energy_type"] == "Solare Strahlungsenergie"].copy()
+
+    def label_facing(v):
+        if v is None or (isinstance(v, float) and pd.isna(v)):
+            return "unknown"
+        if isinstance(v, str):
+            return v
+        deg_map = {
+            0: "N (0°)", 45: "NE (45°)", 90: "E (90°)", 135: "SE (135°)",
+            180: "S (180°)", 225: "SW (225°)", 270: "W (270°)", 315: "NW (315°)",
+        }
+        try:
+            return deg_map.get(int(v), "unknown")
+        except (ValueError, TypeError):
+            return "unknown"
+
+    def label_tilt(v):
+        if v is None or (isinstance(v, float) and pd.isna(v)):
+            return "unknown"
+        if isinstance(v, str):
+            return v
+        if isinstance(v, tuple) and len(v) == 2:
+            return f"{v[0]}-{v[1]}°"
+        return str(v)
+
+    pv["facing_lbl"] = pv["facing"].apply(label_facing)
+    pv["tilt_lbl"] = pv["tilt"].apply(label_tilt)
+    fac = pv.groupby("facing_lbl")["power"].sum().div(1e6).sort_values(ascending=False)
+    til = pv.groupby("tilt_lbl")["power"].sum().div(1e6).sort_values(ascending=False)
+
+    fig, axs = plt.subplots(1, 2, figsize=(13, 5.5), dpi=120)
+    colors_facing = {
+        "S (180°)": "#fde047", "SE (135°)": "#f97316", "SW (225°)": "#fb7185",
+        "E (90°)": "#fbbf24", "W (270°)": "#a78bfa", "east-west": "#10b981",
+        "tracked": "#0ea5e9", "NE (45°)": "#94a3b8", "NW (315°)": "#94a3b8",
+        "N (0°)": "#cbd5e1",
+    }
+    fac_known = fac.drop("unknown", errors="ignore")
+    pcols = [colors_facing.get(n, "#94a3b8") for n in fac_known.index]
+    axs[0].pie(
+        fac_known.values, labels=fac_known.index, colors=pcols,
+        autopct="%1.0f%%", startangle=90,
+        textprops={"fontsize": 9},
+        wedgeprops={"edgecolor": "white", "linewidth": 1},
+    )
+    axs[0].set_title(
+        f"PV capacity by panel orientation\n"
+        f"({fac_known.sum():.1f} GW with known facing)"
+    )
+
+    til_known = til.drop("unknown", errors="ignore")
+    axs[1].barh(range(len(til_known)), til_known.values,
+                color="#0ea5e9", edgecolor="#1e293b", linewidth=0.4)
+    axs[1].set_yticks(range(len(til_known)))
+    axs[1].set_yticklabels(til_known.index)
+    axs[1].set_xlabel("Installed capacity [GW]")
+    axs[1].set_title("PV capacity by tilt angle")
+    axs[1].grid(axis="x", alpha=0.3)
+    fig.suptitle("Solar PV orientation analysis · top 200 k plants", fontsize=13)
+    fig.tight_layout()
+    for d in (FIG, DOCS):
+        fig.savefig(d / out_name, format="svg", bbox_inches="tight")
+    plt.close(fig)
+
+
+def render_wind_age(records, out_name):
+    """Installs vs. decommissions per year + turbine-MW upsizing trend."""
+    wind = records[records["energy_type"] == "Wind"].copy()
+    wind["install_year"] = pd.to_datetime(wind["install_date"]).dt.year
+    wind["removed"] = wind["removal_date"].notna()
+    wind["mw"] = wind["power"] / 1000.0
+
+    installs = (
+        wind.groupby("install_year")
+            .agg(installed_n=("id", "size"), installed_mw=("mw", "sum"))
+            .reset_index()
+    )
+    rem = wind[wind["removed"]].copy()
+    rem["remove_year"] = pd.to_datetime(rem["removal_date"]).dt.year
+    removals = (
+        rem.groupby("remove_year")
+           .agg(removed_n=("id", "size"), removed_mw=("mw", "sum"))
+           .reset_index()
+           .rename(columns={"remove_year": "install_year"})
+    )
+    merged = (
+        pd.merge(installs, removals, on="install_year", how="outer")
+          .fillna(0.0)
+          .sort_values("install_year")
+    )
+    merged = merged[(merged["install_year"] >= 1990) & (merged["install_year"] <= 2025)]
+
+    active = wind.dropna(subset=["install_year"])
+    mean_mw = active.groupby("install_year")["mw"].mean()
+    mean_mw = mean_mw[(mean_mw.index >= 1995) & (mean_mw.index <= 2025)]
+
+    fig, axs = plt.subplots(2, 1, figsize=(11, 8), dpi=120, sharex=True)
+    ax = axs[0]
+    ax.bar(merged["install_year"], merged["installed_mw"],
+           color="#0ea5e9", label="Installed [MW]")
+    ax.bar(merged["install_year"], -merged["removed_mw"],
+           color="#dc2626", label="Decommissioned [MW]")
+    ax.axhline(0, color="#1e293b", linewidth=0.5)
+    ax.set_ylabel("MW per year (+install / −removal)")
+    ax.set_title("German wind fleet: installs vs. decommissions per year")
+    ax.legend(loc="upper left")
+    ax.grid(alpha=0.3)
+
+    ax = axs[1]
+    ax.plot(mean_mw.index, mean_mw.values, color="#16a34a",
+            linewidth=2, marker="o", markersize=4)
+    ax.fill_between(mean_mw.index, mean_mw.values, alpha=0.25, color="#16a34a")
+    ax.set_xlabel("Year")
+    ax.set_ylabel("Mean rotor capacity [MW] (commission year)")
+    ax.set_title("Turbine upsizing trend — rotor MW by commission year")
+    ax.grid(alpha=0.3)
+    fig.tight_layout()
+    for d in (FIG, DOCS):
+        fig.savefig(d / out_name, format="svg", bbox_inches="tight")
+    plt.close(fig)
+
+
 def render_state_ramp(records, units, out_name):
     sub = records[
         records["energy_type"].isin(["Wind", "Solare Strahlungsenergie"])
@@ -501,6 +625,8 @@ def main():
     render_density_map(records, units, "Solare Strahlungsenergie", "YlOrRd",
                        "sample-pv-density.svg", "PV capacity density (≥49 kW)")
     export_largest_plants(records, units, "largest-plants.json")
+    render_pv_orientation(records, "sample-pv-orientation.svg")
+    render_wind_age(records, "sample-wind-age.svg")
     print("Sample renders complete.")
 
 
