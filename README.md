@@ -126,6 +126,22 @@ Where Germany actually installed new wind + PV (≥ 49 kW) during 2024 — 13.4 
 in this scrape. Leipziger Land alone added 565 MW (utility solar in the
 former-lignite belt).
 
+### Build-out per Bundesland
+
+![State ramp](fig/sample-state-ramp.svg)
+
+Cumulative installed capacity per state since 2000. Bayern leads at 22 GW
+(driven by PV), Niedersachsen second at 19 GW (driven by wind), Brandenburg
+third at 18 GW (mixed).
+
+### PV by installation type
+
+![PV by type](fig/sample-pv-by-type.svg)
+
+16 000 free-standing utility parks carry ~ 43 GW. 184 000 building-mounted
+commercial rooftops carry ~ 30 GW. The under-49 kW residential / balcony long
+tail (millions of plants, ~ 30 GW total) is excluded from this scrape.
+
 ---
 
 ## Quickstart

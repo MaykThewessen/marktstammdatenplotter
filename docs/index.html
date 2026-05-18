@@ -65,6 +65,8 @@
       <div class="section">Data</div>
       <ul>
         <li><a href="#energy-mix">Energy-type mix</a></li>
+        <li><a href="#state-ramp">Build-out per Bundesland</a></li>
+        <li><a href="#pv-by-type">PV by installation type</a></li>
         <li><a href="#yoy-additions">2024 additions</a></li>
         <li><a href="#kreise-rank">Top Kreise by capacity</a></li>
         <li><a href="#operators">Top operators</a></li>
@@ -401,6 +403,35 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
         <figure>
           <object type="image/svg+xml" data="assets/sample-energy-mix.svg" aria-label="Energy-type mix"></object>
           <figcaption>Figure 14 — MaStR energy-type mix, installed capacity at 2025-01-01.</figcaption>
+        </figure>
+      </section>
+
+      <section id="state-ramp">
+        <h2>Build-out per Bundesland</h2>
+        <p>
+          Monthly cumulative wind + PV ≥ 49 kW per state, 2000 → 2025.
+          Bayern (22 GW), Niedersachsen (19 GW) and Brandenburg (18 GW) lead.
+          Sharp inflection around 2010 = PV boom; the post-2020 wedge is
+          mostly utility-scale solar in the former-lignite belt.
+        </p>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-state-ramp.svg" aria-label="Per-Bundesland ramp"></object>
+          <figcaption>Figure 16 — Renewable build-out per Bundesland, 2000 → 2025.</figcaption>
+        </figure>
+      </section>
+
+      <section id="pv-by-type">
+        <h2>PV by installation type</h2>
+        <p>
+          Which sub-type of plant carries the GW? Top 200 k PV plants split by
+          <code>ArtDerSolaranlageId</code>. Free-standing utility parks (16 k
+          plants) hold ~ 43 GW; building-mounted commercial rooftops (184 k
+          plants) hold ~ 30 GW. The residential rooftop and balcony long tail
+          under 49 kW is excluded — that's where the count is, but not the GW.
+        </p>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-pv-by-type.svg" aria-label="PV by installation type"></object>
+          <figcaption>Figure 17 — Cumulative PV by installation type + pie of latest share.</figcaption>
         </figure>
       </section>
 

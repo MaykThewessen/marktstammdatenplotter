@@ -262,6 +262,95 @@ def render_yoy_additions(records, units, out_name, year: int = 2024):
     plt.close(fig)
 
 
+def render_state_ramp(records, units, out_name):
+    sub = records[
+        records["energy_type"].isin(["Wind", "Solare Strahlungsenergie"])
+        & (records["install_date"] >= "2000-01-01")
+    ].copy()
+    pts = gpd.GeoDataFrame(
+        sub.reset_index(drop=True),
+        geometry=gpd.points_from_xy(sub["longitude"], sub["latitude"], crs="EPSG:4326"),
+    )
+    j = gpd.sjoin(pts, units[["bundesland", "geometry"]], predicate="within", how="left")
+    j = j.loc[~j.index.duplicated(keep="first")]
+    sub["bundesland"] = j["bundesland"].reindex(sub.reset_index(drop=True).index).values
+
+    sub["month"] = sub["install_date"].dt.to_period("M")
+    piv = (
+        sub.groupby(["month", "bundesland"])["power"]
+           .sum().div(1e6).unstack(fill_value=0.0).cumsum()
+    )
+    piv.index = piv.index.to_timestamp()
+    order = piv.iloc[-1].sort_values(ascending=False).index.tolist()
+    piv = piv[order]
+
+    import numpy as np
+    palette = plt.cm.tab20(np.linspace(0, 1, len(piv.columns)))
+
+    fig, ax = plt.subplots(figsize=(11, 6.5), dpi=120)
+    ax.stackplot(piv.index, piv.values.T, labels=piv.columns,
+                 colors=palette, alpha=0.92, linewidth=0)
+    ax.set_ylabel("Cumulative installed [GW] (Wind + PV ≥49 kW)")
+    ax.set_title(
+        "Renewable build-out per Bundesland, 2000 → 2025\n"
+        "(MaStR · wind: full · PV: top 200 k by capacity)"
+    )
+    ax.legend(loc="upper left", ncol=2, fontsize=9, framealpha=0.9)
+    ax.grid(alpha=0.3)
+    fig.tight_layout()
+    for d in (FIG, DOCS):
+        fig.savefig(d / out_name, format="svg", bbox_inches="tight")
+    plt.close(fig)
+
+
+def render_pv_by_type(records, out_name):
+    pv = records[records["energy_type"] == "Solare Strahlungsenergie"].copy()
+    pv = pv[pv["install_date"] >= "2000-01-01"]
+    pv["installation_type"] = pv["installation_type"].fillna("unknown")
+    pv["month"] = pv["install_date"].dt.to_period("M")
+    piv = (
+        pv.groupby(["month", "installation_type"])["power"]
+          .sum().div(1e6).unstack(fill_value=0.0).cumsum()
+    )
+    piv.index = piv.index.to_timestamp()
+    order = piv.iloc[-1].sort_values(ascending=False).index.tolist()
+    piv = piv[order]
+
+    colors_map = {
+        "free": "#f59e0b",
+        "building": "#0ea5e9",
+        "building_other": "#7c3aed",
+        "parking_lot": "#10b981",
+        "water": "#06b6d4",
+        "balkonkraftwerk": "#ef4444",
+        "unknown": "#94a3b8",
+    }
+    palette = [colors_map.get(c, "#94a3b8") for c in piv.columns]
+
+    fig, axs = plt.subplots(1, 2, figsize=(13, 5.5), dpi=120,
+                            gridspec_kw={"width_ratios": [2, 1]})
+    ax = axs[0]
+    ax.stackplot(piv.index, piv.values.T, labels=piv.columns,
+                 colors=palette, alpha=0.95, linewidth=0)
+    ax.set_ylabel("Cumulative PV [GW] (top 200 k plants)")
+    ax.set_title("PV build-out by installation type, 2000 → 2025")
+    ax.legend(loc="upper left", fontsize=9, framealpha=0.92)
+    ax.grid(alpha=0.3)
+
+    ax2 = axs[1]
+    latest = piv.iloc[-1]
+    ax2.pie(latest.values, labels=latest.index, colors=palette,
+            autopct="%1.0f%%", startangle=90,
+            textprops={"fontsize": 9},
+            wedgeprops={"edgecolor": "white", "linewidth": 1})
+    ax2.set_title(f"Share at {piv.index[-1].date()}\n({latest.sum():.1f} GW total)")
+
+    fig.tight_layout()
+    for d in (FIG, DOCS):
+        fig.savefig(d / out_name, format="svg", bbox_inches="tight")
+    plt.close(fig)
+
+
 def render_bundesland_chart(records, units, out_name):
     def state_totals(sub):
         active = sub[
@@ -334,6 +423,8 @@ def main():
     render_offshore_chart(records, "sample-offshore-windparks.svg")
     render_energy_mix(records, "sample-energy-mix.svg")
     render_yoy_additions(records, units, "sample-2024-additions.svg", year=2024)
+    render_state_ramp(records, units, "sample-state-ramp.svg")
+    render_pv_by_type(records, "sample-pv-by-type.svg")
     print("Sample renders complete.")
 
 
