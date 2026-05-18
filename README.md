@@ -11,9 +11,13 @@
 plants ≥ 49 kW / 58 GW) capacity per Kreis, 2005 → 2025. 21 yearly frames from
 the live registry, fixed Jenks bins so colors stay comparable across years.*
 
-[![Docs](https://img.shields.io/badge/docs-github.io-blue)](https://maykthewessen.github.io/marktstammdatenplotter/)
-[![Python](https://img.shields.io/badge/python-3.11+-blue)](https://www.python.org/)
+[![Docs](https://img.shields.io/badge/docs-github.io-blue?logo=github)](https://maykthewessen.github.io/marktstammdatenplotter/)
+[![Refresh CI](https://github.com/MaykThewessen/marktstammdatenplotter/actions/workflows/refresh-docs.yml/badge.svg)](https://github.com/MaykThewessen/marktstammdatenplotter/actions/workflows/refresh-docs.yml)
+[![Tests](https://img.shields.io/badge/parser%20tests-52%20passing-brightgreen?logo=pytest)](tests/test_parser.py)
+[![Python](https://img.shields.io/badge/python-3.11+-blue?logo=python&logoColor=white)](https://www.python.org/)
+[![Pixi](https://img.shields.io/badge/managed%20by-pixi-yellow?logo=conda-forge)](https://pixi.sh)
 [![Data](https://img.shields.io/badge/source-MaStR-orange)](https://www.marktstammdatenregister.de/)
+[![Marimo](https://img.shields.io/badge/notebooks-marimo-blueviolet)](https://marimo.io)
 
 > [!WARNING]
 > Research-quality code — designed to run once. Most of it is AI-generated and
@@ -117,6 +121,20 @@ mapping individual turbines.
 All registered electricity-generating units in this scrape, by `Energietraeger`.
 Coal (Braunkohle + Steinkohle, 31 GW) still rivals utility-scale PV (58 GW).
 Erdgas (36 GW) carries most of the peaking load.
+
+### Capacity density (MW per km²)
+
+Absolute capacity makes large rural Kreise look more impressive than they
+are. Normalising by area reshuffles the ranking — small coastal Kreise on
+the wind side, small city-Kreise hosting one or two utility parks on the
+PV side.
+
+| Wind density | PV density |
+|---|---|
+| ![Wind density](fig/sample-wind-density.svg) | ![PV density](fig/sample-pv-density.svg) |
+
+Top per-km² Kreise: **Dithmarschen** 1.6 MW/km² wind, **Straubing Stadt**
+1.5 MW/km² PV.
 
 ### Capacity added during 2024
 

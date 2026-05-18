@@ -67,7 +67,9 @@
         <li><a href="#energy-mix">Energy-type mix</a></li>
         <li><a href="#state-ramp">Build-out per Bundesland</a></li>
         <li><a href="#pv-by-type">PV by installation type</a></li>
+        <li><a href="#density">Capacity density (MW/km²)</a></li>
         <li><a href="#yoy-additions">2024 additions</a></li>
+        <li><a href="#largest-plants">Largest individual plants</a></li>
         <li><a href="#kreise-rank">Top Kreise by capacity</a></li>
         <li><a href="#operators">Top operators</a></li>
         <li><a href="#offshore">Offshore wind</a></li>
@@ -433,6 +435,82 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
           <object type="image/svg+xml" data="assets/sample-pv-by-type.svg" aria-label="PV by installation type"></object>
           <figcaption>Figure 17 — Cumulative PV by installation type + pie of latest share.</figcaption>
         </figure>
+      </section>
+
+      <section id="density">
+        <h2>Capacity density (MW/km²)</h2>
+        <p>
+          Absolute capacity makes big Kreise look impressive even when their
+          per-km² intensity is low. Normalising by Kreis area reshuffles the
+          ranking: <b>Dithmarschen</b> and <b>Nordfriesland</b> top wind at
+          1.1–1.6 MW/km²; the city-Kreise of <b>Straubing</b>, <b>Amberg</b>
+          and <b>Memmingen</b> top PV because they host utility parks on
+          small footprints.
+        </p>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-wind-density.svg" aria-label="Wind density choropleth"></object>
+          <figcaption>Figure 18 — Wind capacity density per Kreis (MW per km²), snapshot 2025-01-01.</figcaption>
+        </figure>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-pv-density.svg" aria-label="PV density choropleth"></object>
+          <figcaption>Figure 19 — PV (≥ 49 kW) capacity density per Kreis (MW per km²).</figcaption>
+        </figure>
+      </section>
+
+      <section id="largest-plants">
+        <h2>Largest individual plants</h2>
+        <p>
+          Top 10 by single-unit capacity (<code>Bruttoleistung</code>) in this
+          scrape, snapshot 2025-01-01. Wind list shows the new
+          <b>Nordseecluster</b> + Iberdrola <b>Windanker</b> 15 MW turbines —
+          all offshore, so Kreis is empty. PV list captures every solar park
+          ≥ 100 MW: <b>Schafhöfen</b> (200 MW, Bayern), <b>SILUX 1/2/4</b> +
+          <b>EnBW Gottesgabe</b> + <b>SunInvest</b> all clustered in the
+          former-lignite belt around Leipzig + the Oder-Spree border.
+        </p>
+
+        <h3>Top 10 PV plants</h3>
+        <table>
+          <thead><tr>
+            <th style="text-align:right">MW</th><th>Owner / project</th>
+            <th>Kreis</th><th>Bundesland</th><th style="text-align:right">Installed</th>
+          </tr></thead>
+          <tbody>
+            <tr><td style="text-align:right">200.0</td><td>BEE Solarpark Schafhöfen GmbH &amp; Co. KG</td><td>Regensburg</td><td>Bayern</td><td style="text-align:right">—</td></tr>
+            <tr><td style="text-align:right">162.3</td><td>SILUX Solarpark 1 GmbH &amp; Co. KG</td><td>Leipziger Land</td><td>Sachsen</td><td style="text-align:right">2024</td></tr>
+            <tr><td style="text-align:right">153.1</td><td>EnBW Solarpark Gottesgabe GmbH</td><td>Märkisch-Oderland</td><td>Brandenburg</td><td style="text-align:right">2022</td></tr>
+            <tr><td style="text-align:right">151.0</td><td>EnBW SunInvest GmbH &amp; Co. KG</td><td>Märkisch-Oderland</td><td>Brandenburg</td><td style="text-align:right">2022</td></tr>
+            <tr><td style="text-align:right">144.8</td><td>SILUX Solarpark 4 GmbH &amp; Co. KG</td><td>Leipziger Land</td><td>Sachsen</td><td style="text-align:right">2024</td></tr>
+            <tr><td style="text-align:right">141.6</td><td>ET Solar Gallin-Kuppentin</td><td>Parchim</td><td>Mecklenburg-Vorpommern</td><td style="text-align:right">—</td></tr>
+            <tr><td style="text-align:right">133.3</td><td>LEPV Energiepark Bohrau GmbH &amp; Co. KG</td><td>Spree-Neiße</td><td>Brandenburg</td><td style="text-align:right">—</td></tr>
+            <tr><td style="text-align:right">109.7</td><td>SILUX Solarpark 2 GmbH &amp; Co. KG</td><td>Leipziger Land</td><td>Sachsen</td><td style="text-align:right">2023</td></tr>
+            <tr><td style="text-align:right">102.3</td><td>CEE PVF Klüden GmbH &amp; Co. KG</td><td>Ohrekreis</td><td>Sachsen-Anhalt</td><td style="text-align:right">2025</td></tr>
+            <tr><td style="text-align:right">95.0</td><td>PV Lako Angern GmbH &amp; Co. KG</td><td>Oder-Spree</td><td>Brandenburg</td><td style="text-align:right">—</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Top 10 wind turbines (single-unit capacity)</h3>
+        <table>
+          <thead><tr>
+            <th style="text-align:right">MW</th><th>Owner / project</th>
+            <th>Kreis</th><th>Bundesland</th><th style="text-align:right">Installed</th>
+          </tr></thead>
+          <tbody>
+            <tr><td style="text-align:right">15.0</td><td>Nordseecluster A GmbH &amp; Co. KG</td><td>—</td><td>(offshore)</td><td style="text-align:right">—</td></tr>
+            <tr><td style="text-align:right">15.0</td><td>Nordseecluster A GmbH &amp; Co. KG</td><td>—</td><td>(offshore)</td><td style="text-align:right">—</td></tr>
+            <tr><td style="text-align:right">15.0</td><td>Nordseecluster B GmbH &amp; Co. KG</td><td>—</td><td>(offshore)</td><td style="text-align:right">—</td></tr>
+            <tr><td style="text-align:right">15.0</td><td>Nordseecluster A GmbH &amp; Co. KG</td><td>—</td><td>(offshore)</td><td style="text-align:right">—</td></tr>
+            <tr><td style="text-align:right">15.0</td><td>Nordseecluster B GmbH &amp; Co. KG</td><td>—</td><td>(offshore)</td><td style="text-align:right">—</td></tr>
+            <tr><td style="text-align:right">15.0</td><td>Windanker GmbH</td><td>—</td><td>(offshore)</td><td style="text-align:right">—</td></tr>
+            <tr><td style="text-align:right">15.0</td><td>Nordseecluster B GmbH &amp; Co. KG</td><td>—</td><td>(offshore)</td><td style="text-align:right">—</td></tr>
+            <tr><td style="text-align:right">15.0</td><td>Nordseecluster A GmbH &amp; Co. KG</td><td>—</td><td>(offshore)</td><td style="text-align:right">—</td></tr>
+            <tr><td style="text-align:right">15.0</td><td>Nordseecluster A GmbH &amp; Co. KG</td><td>—</td><td>(offshore)</td><td style="text-align:right">—</td></tr>
+            <tr><td style="text-align:right">15.0</td><td>Nordseecluster A GmbH &amp; Co. KG</td><td>—</td><td>(offshore)</td><td style="text-align:right">—</td></tr>
+          </tbody>
+        </table>
+        <p style="font-size:0.9rem;color:var(--rtd-muted)">
+          Raw data: <a href="assets/largest-plants.json"><code>largest-plants.json</code></a>.
+        </p>
       </section>
 
       <section id="yoy-additions">

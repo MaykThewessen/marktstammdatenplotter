@@ -262,6 +262,77 @@ def render_yoy_additions(records, units, out_name, year: int = 2024):
     plt.close(fig)
 
 
+def render_density_map(records, units, energy_type, cmap, out_name, title_prefix):
+    import matplotlib.colors as mcolors
+
+    units = units.copy()
+    if "area_km2" not in units.columns:
+        units["area_km2"] = units.to_crs(epsg=25832).geometry.area / 1e6
+    agg, active = mastr_plot.aggregate_by_unit(records, units, SNAP.date(), energy_type)
+    agg["mw_per_km2"] = agg["power_gw"] * 1000.0 / agg["area_km2"]
+    positive = agg["mw_per_km2"][agg["mw_per_km2"] > 0].to_numpy()
+    bins = mastr_plot.jenks_bins(positive, k=7)
+    if len(bins) < 2:
+        bins = [0.0, max(1.0, float(positive.max() or 1.0))]
+    norm = mcolors.BoundaryNorm(bins, ncolors=256)
+
+    fig, ax = plt.subplots(figsize=(9, 11), dpi=120)
+    agg.plot(
+        column="mw_per_km2", ax=ax, cmap=cmap, norm=norm,
+        edgecolor="white", linewidth=0.3, legend=True,
+        legend_kwds={"label": "Capacity density [MW/km²]", "shrink": 0.6},
+        missing_kwds={"color": "#eeeeee"},
+    )
+    ax.set_axis_off()
+    ax.set_title(
+        f"{title_prefix} per km² — {SNAP.date()}\n"
+        f"{len(active):,} active · {round(agg['power_gw'].sum(), 1)} GW total",
+        fontsize=13,
+    )
+    fig.tight_layout()
+    for d in (FIG, DOCS):
+        fig.savefig(d / out_name, format="svg", bbox_inches="tight")
+    plt.close(fig)
+
+
+def export_largest_plants(records, units, out_name, top_n: int = 10):
+    """Write JSON listing the top-N largest single plants per technology."""
+    import json
+
+    def topn(et):
+        sub = records[records["energy_type"] == et].copy()
+        sub = sub.sort_values("power", ascending=False).head(top_n)
+        if sub.empty:
+            return sub
+        pts = gpd.GeoDataFrame(
+            sub.reset_index(drop=True),
+            geometry=gpd.points_from_xy(sub["longitude"], sub["latitude"], crs="EPSG:4326"),
+        )
+        j = gpd.sjoin(pts, units[["name", "bundesland", "geometry"]],
+                      predicate="within", how="left")
+        j = j.loc[~j.index.duplicated(keep="first")]
+        sub["kreis"] = j["name"].reindex(sub.reset_index(drop=True).index).values
+        sub["bundesland"] = j["bundesland"].reindex(sub.reset_index(drop=True).index).values
+        sub["mw"] = sub["power"] / 1000.0
+        sub["install_year"] = pd.to_datetime(sub["install_date"]).dt.year
+        return sub
+
+    big_pv = topn("Solare Strahlungsenergie")
+    big_wind = topn("Wind")
+    records_out = []
+    for tech, df_top in (("PV", big_pv), ("Wind", big_wind)):
+        for _, r in df_top.iterrows():
+            records_out.append({
+                "tech": tech,
+                "mw": round(float(r["mw"]), 2),
+                "owner": str(r["owner_name"])[:80],
+                "kreis": str(r["kreis"]) if pd.notna(r["kreis"]) else None,
+                "bundesland": str(r["bundesland"]) if pd.notna(r["bundesland"]) else None,
+                "install_year": int(r["install_year"]) if pd.notna(r["install_year"]) else None,
+            })
+    (DOCS / out_name).write_text(json.dumps(records_out, indent=2))
+
+
 def render_state_ramp(records, units, out_name):
     sub = records[
         records["energy_type"].isin(["Wind", "Solare Strahlungsenergie"])
@@ -425,6 +496,11 @@ def main():
     render_yoy_additions(records, units, "sample-2024-additions.svg", year=2024)
     render_state_ramp(records, units, "sample-state-ramp.svg")
     render_pv_by_type(records, "sample-pv-by-type.svg")
+    render_density_map(records, units, "Wind", "GnBu",
+                       "sample-wind-density.svg", "Wind capacity density")
+    render_density_map(records, units, "Solare Strahlungsenergie", "YlOrRd",
+                       "sample-pv-density.svg", "PV capacity density (≥49 kW)")
+    export_largest_plants(records, units, "largest-plants.json")
     print("Sample renders complete.")
 
 
