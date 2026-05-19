@@ -92,6 +92,19 @@ balcony solar (the long tail of 6 M plants below 200 kW) is excluded.
 > total installed. PV map covers ~195 591 active plants ≥ 49 kW — 72.8 GW
 > combined. Offshore: 1 732 turbines · 10.4 GW (Nordsee + Ostsee).
 
+### Per-unit size-bin distribution
+
+Where the GW + GWh actually sit when you sort by single-unit nameplate
+power. Same bins used for all three technologies — wind almost entirely
+1-10 MW; PV spread across 10 kW – 100 MW; BESS bimodal (residential
+10-100 kW + utility 100-1000 MW).
+
+| Wind | PV |
+|---|---|
+| ![Wind by size](fig/sample-wind-by-size.svg) | ![PV by size](fig/sample-pv-by-size.svg) |
+
+![BESS by size](fig/sample-bess-by-size.svg)
+
 ### Installed capacity by Bundesland
 
 ![By Bundesland](fig/sample-by-bundesland.svg)

@@ -381,6 +381,23 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
           <figcaption>Figure 8 — Cumulative PV capacity over time, top 50 000 plants ≥ 200 kW.</figcaption>
         </figure>
 
+        <h3>Per-unit size-bin distribution</h3>
+        <p>
+          Same size-bin axis as the BESS chart above. Wind sits almost
+          entirely in the 1-10 MW bin (75 GW of the 79.7 GW total).
+          PV is spread across 10 kW – 100 MW — utility ground-mount
+          (1-10 MW + 10-100 MW) carries roughly equal weight, with
+          ≥ 100 MW reserved for a handful of mega-parks.
+        </p>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-wind-by-size.svg" aria-label="Wind size-bin breakdown"></object>
+          <figcaption>Figure 8a — Wind installed power by per-turbine size-bin.</figcaption>
+        </figure>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-pv-by-size.svg" aria-label="PV size-bin breakdown"></object>
+          <figcaption>Figure 8b — PV (top-200k slice) installed power by per-plant size-bin. Sub-49 kW residential excluded by the scrape sort cut-off.</figcaption>
+        </figure>
+
         <h3>Installed capacity by Bundesland</h3>
         <figure>
           <object type="image/svg+xml" data="assets/sample-by-bundesland.svg" aria-label="Capacity by Bundesland"></object>
@@ -566,6 +583,19 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
           Pumpspeicher-dominated by ~100× because hydro PSH has multi-hour
           duration while Li-ion sits in the 1-2 h band.
         </p>
+
+        <h3>Size-bin breakdown — GW + GWh per per-unit size class</h3>
+        <p>
+          Where does the capacity actually sit when you sort by single-unit
+          power? Residential (10-100 kW) carries half the units but only
+          ~3 GW; the <b>100-1000 MW bin</b> — just 30 units — already accounts
+          for <b>6.2 GW + 765 GWh</b> thanks to Pumpspeicher. The "1 GW+" bin
+          stays empty for now (Jänschwalde 1 GW is still in Planung).
+        </p>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-bess-by-size.svg" aria-label="BESS per-unit size-bin breakdown"></object>
+          <figcaption>Figure 25 — BESS installed power (left) and usable energy (right) per per-unit size-bin. Bin counts in parentheses.</figcaption>
+        </figure>
 
         <h3>BESS power per Kreis</h3>
         <figure>

@@ -19,6 +19,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import geopandas as gpd
 
@@ -467,6 +468,106 @@ BESS_SECTOR_COLORS = {
     "CSS (30 kWh – 1 MWh)": "#fbbf24",
     "LSS (≥1 MWh)": "#a78bfa",
 }
+
+
+SIZE_BIN_EDGES_KW = [0, 10, 100, 1_000, 10_000, 100_000, 1_000_000, 100_000_000]
+SIZE_BIN_LABELS = [
+    "0-10 kW", "10-100 kW", "100 kW-1 MW", "1-10 MW",
+    "10-100 MW", "100-1000 MW", "1 GW+",
+]
+
+
+def _size_bin_stats(df, power_col="power_kw", energy_col=None):
+    """Sum power (GW), energy (GWh, optional), and counts per size-bin."""
+    df = df.copy()
+    df["__bin__"] = pd.cut(
+        df[power_col], bins=SIZE_BIN_EDGES_KW,
+        labels=SIZE_BIN_LABELS, include_lowest=True, right=False,
+    )
+    gw = (df.groupby("__bin__", observed=False)[power_col].sum() / 1e6
+            ).reindex(SIZE_BIN_LABELS).fillna(0.0)
+    n = (df.groupby("__bin__", observed=False).size()
+            ).reindex(SIZE_BIN_LABELS).fillna(0).astype(int)
+    gwh = None
+    if energy_col is not None:
+        gwh = (df.groupby("__bin__", observed=False)[energy_col].sum() / 1e6
+                  ).reindex(SIZE_BIN_LABELS).fillna(0.0)
+    return gw, gwh, n
+
+
+def _bar_with_labels(ax, values, color, ylabel, title, fmt="{:.2f}",
+                     count_series=None):
+    bars = ax.bar(SIZE_BIN_LABELS, values, color=color,
+                  edgecolor="#1e293b", linewidth=0.4)
+    ymax = max(values.max(), 1e-9)
+    for i, v in enumerate(values):
+        if v <= 0:
+            continue
+        label = fmt.format(v)
+        if count_series is not None:
+            label += f"\n({int(count_series.iloc[i]):,})"
+        ax.text(i, v + ymax * 0.02, label, ha="center", fontsize=8)
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.grid(axis="y", alpha=0.3)
+    ax.set_xticks(range(len(SIZE_BIN_LABELS)))
+    ax.set_xticklabels(SIZE_BIN_LABELS, rotation=25, ha="right")
+
+
+def render_bess_by_size(bess_df, out_name: str):
+    """Two-panel: GW per power-bin + GWh per power-bin (BESS)."""
+    snap = SNAP
+    active = bess_df[
+        (bess_df["install_date"] <= snap)
+        & (bess_df["removal_date"].isna() | (bess_df["removal_date"] > snap))
+    ]
+    gw, gwh, n = _size_bin_stats(active, "power_kw", "energy_kwh")
+
+    purples = ["#ede9fe", "#ddd6fe", "#c4b5fd", "#a78bfa",
+               "#8b5cf6", "#6d28d9", "#4c1d95"]
+    fig, axs = plt.subplots(1, 2, figsize=(14, 4.5), dpi=120)
+    _bar_with_labels(axs[0], gw, purples,
+                     "Installed power [GW]",
+                     "BESS installed power by per-unit size-bin",
+                     fmt="{:.2f}", count_series=n)
+    _bar_with_labels(axs[1], gwh, purples,
+                     "Usable energy [GWh]",
+                     "BESS usable energy by per-unit size-bin",
+                     fmt="{:.1f}")
+    fig.suptitle(
+        f"BESS size-bin breakdown — {snap.date()} (active only · "
+        f"{len(active):,} units · {gw.sum():.2f} GW · {gwh.sum():.1f} GWh)",
+        fontsize=13,
+    )
+    fig.tight_layout()
+    for d in (FIG, DOCS):
+        fig.savefig(d / out_name, format="svg", bbox_inches="tight")
+    plt.close(fig)
+
+
+def render_generation_by_size(records, energy_type: str, palette: list[str],
+                              tech_label: str, noun: str, out_name: str):
+    """Single-panel GW per power-bin for Wind / PV."""
+    snap = SNAP
+    sub = records[records["energy_type"] == energy_type]
+    active = sub[
+        (sub["install_date"] <= snap)
+        & (sub["removal_date"].isna() | (sub["removal_date"] > snap))
+    ].copy()
+    active = active.rename(columns={"power": "power_kw"})
+    gw, _, n = _size_bin_stats(active, "power_kw")
+
+    fig, ax = plt.subplots(figsize=(11, 4.5), dpi=120)
+    _bar_with_labels(
+        ax, gw, palette, "Installed power [GW]",
+        f"{tech_label} installed power by per-unit size-bin — {snap.date()}\n"
+        f"({len(active):,} active {noun} · {gw.sum():.1f} GW total)",
+        fmt="{:.2f}", count_series=n,
+    )
+    fig.tight_layout()
+    for d in (FIG, DOCS):
+        fig.savefig(d / out_name, format="svg", bbox_inches="tight")
+    plt.close(fig)
 
 
 def render_bess_sector_charts(bess_df, out_summary: str, out_growth: str,
@@ -927,6 +1028,21 @@ def main():
     render_pv_orientation(records, "sample-pv-orientation.svg")
     render_wind_age(records, "sample-wind-age.svg")
 
+    render_generation_by_size(
+        records, "Wind",
+        palette=["#cffafe", "#a5f3fc", "#67e8f9", "#22d3ee",
+                 "#0891b2", "#155e75", "#1e3a8a"],
+        tech_label="Wind", noun="turbines",
+        out_name="sample-wind-by-size.svg",
+    )
+    render_generation_by_size(
+        records, "Solare Strahlungsenergie",
+        palette=["#fef3c7", "#fed7aa", "#fdba74", "#fb923c",
+                 "#ea580c", "#9a3412", "#7c2d12"],
+        tech_label="PV (top-200k slice)", noun="plants",
+        out_name="sample-pv-by-size.svg",
+    )
+
     # BESS slice lives in its own data-bess/ dir; render only if present.
     try:
         bess_df, _ = mastr_plot.load_bess()
@@ -947,6 +1063,7 @@ def main():
             out_growth="sample-bess-sector-growth.svg",
             out_duration="sample-bess-sector-duration.svg",
         )
+        render_bess_by_size(bess_df, "sample-bess-by-size.svg")
 
     print("Sample renders complete.")
 

@@ -7,6 +7,18 @@ All notable changes to this project. Follows
 ## [Unreleased]
 
 ### Added
+- **Per-unit size-bin breakdown for Wind / PV / BESS.** Single shared
+  axis of seven log-spaced bins (0-10 kW, 10-100 kW, 100 kW-1 MW,
+  1-10 MW, 10-100 MW, 100-1000 MW, 1 GW+). BESS chart has two panels
+  (GW + GWh); Wind + PV charts have one panel each (GW only).
+  Headline finds:
+  - Wind: 75 GW of the 79.7 GW total sits in the 1-10 MW bin.
+  - PV (top-200k slice): 22.7 GW in 100 kW-1 MW + 24.9 GW in 1-10 MW.
+    Only 6 plants ≥ 100 MW.
+  - BESS: 192k units carry 2.9 GW / 3.5 GWh of residential (10-100 kW);
+    the 30 units in 100-1000 MW carry 6.2 GW / **765 GWh** alone
+    (Pumpspeicher + biggest Li-ion). The 1 GW+ bin stays empty until
+    Jänschwalde commissions.
 - **BESS three-sector split** (HSS / CSS / LSS) matching the
   battery-charts.de (RWTH Aachen · Figgener et al.) convention also used
   by BVES, EASE, and the EU SET-Plan. Boundaries: < 30 kWh / 30 kWh –
