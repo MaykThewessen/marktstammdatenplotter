@@ -45,7 +45,7 @@ PRESETS = {
         "cmap": "YlOrRd",
         "noun": "plants",
         "title": "Installed PV capacity in Germany",
-        "extra_subtitle": " ≥ 49 kW (top 200k by capacity)",
+        "extra_subtitle": "",
     },
     "bess": {
         "kind": "bess",

@@ -78,6 +78,66 @@ def render_map(records, units, energy_type, title_prefix, cmap, out_name):
     _save_choropleth_pair(agg, "power_gw", cmap, bins, title, "Capacity [GW]", out_name)
 
 
+def _load_planned_gw_monthly(energy_type: str, snap: pd.Timestamp) -> pd.Series | None:
+    """Read In-Planung plants with a future planned date from raw MaStR CSV.
+
+    Returns a monthly cumulative GW Series (Timestamp index) representing
+    capacity additions expected AFTER snap, or None if data unavailable.
+    Caches to a small parquet so repeat renders are fast.
+    """
+    bulk_dir = mastr_plot.find_bulk_dir()
+    if bulk_dir is None:
+        return None
+
+    raw_map = {
+        "Solare Strahlungsenergie": ("bnetza_mastr_solar_raw.csv",  "Bruttoleistung", "pv"),
+        "Wind":                     ("bnetza_mastr_wind_raw.csv",   "Bruttoleistung", "wind"),
+    }
+    if energy_type not in raw_map:
+        return None
+
+    csv_name, power_col, tech_key = raw_map[energy_type]
+    raw_path   = bulk_dir / csv_name
+    cache_path = bulk_dir / f"planned-{tech_key}.parquet"
+
+    if not raw_path.exists():
+        return None
+
+    if cache_path.exists() and cache_path.stat().st_mtime > raw_path.stat().st_mtime:
+        planned_df = pd.read_parquet(cache_path)
+    else:
+        print(f"  Reading planned {tech_key} from {csv_name} (one-off, ~15 s) …")
+        df = pd.read_csv(
+            raw_path,
+            usecols=["EinheitBetriebsstatus", "GeplantesInbetriebnahmedatum", power_col],
+            dtype={"EinheitBetriebsstatus": "category", power_col: str,
+                   "GeplantesInbetriebnahmedatum": str},
+            low_memory=False,
+        )
+        df[power_col] = pd.to_numeric(df[power_col], errors="coerce")
+        df["planned_date"] = pd.to_datetime(
+            df["GeplantesInbetriebnahmedatum"], errors="coerce", utc=False
+        )
+        planned_df = df[
+            (df["EinheitBetriebsstatus"] == "In Planung")
+            & df["planned_date"].notna()
+            & (df[power_col] > 0)
+        ][["planned_date", power_col]].rename(columns={power_col: "power_kw"}).copy()
+        planned_df.to_parquet(cache_path, index=False)
+        print(f"    Cached → {cache_path.name}  ({len(planned_df):,} rows)")
+
+    future = planned_df[planned_df["planned_date"] > snap].copy()
+    if future.empty:
+        return None
+
+    monthly = (
+        future.assign(month=future["planned_date"].dt.to_period("M"))
+              .groupby("month")["power_kw"].sum().div(1e6).cumsum()
+    )
+    monthly.index = monthly.index.to_timestamp()
+    return monthly
+
+
 def render_growth(records, energy_type, label, color_fill, color_line, out_name,
                   xlim_start="2000-01-01"):
     sub = records[records["energy_type"] == energy_type].copy()
@@ -86,12 +146,25 @@ def render_growth(records, energy_type, label, color_fill, color_line, out_name,
            .groupby("month")["power"].sum().div(1e6).cumsum()
     )
     monthly.index = monthly.index.to_timestamp()
+
+    planned = _load_planned_gw_monthly(energy_type, SNAP)
+    last_val = float(monthly.iloc[-1]) if len(monthly) else 0.0
+
     fig, ax = plt.subplots(figsize=(9, 3.5), dpi=120)
     ax.fill_between(monthly.index, monthly.values, color=color_fill, alpha=0.35)
-    ax.plot(monthly.index, monthly.values, color=color_line, linewidth=2)
+    ax.plot(monthly.index, monthly.values, color=color_line, linewidth=2,
+            label="Commissioned")
+    if planned is not None:
+        plan_line = planned + last_val
+        # Connect planned line to historical endpoint
+        join_idx = pd.DatetimeIndex([SNAP]).append(plan_line.index)
+        join_vals = np.concatenate([[last_val], plan_line.values])
+        ax.plot(join_idx, join_vals, color=color_line, linewidth=1.8,
+                linestyle="--", alpha=0.7, label="Planned (MaStR)")
     ax.set_xlim(left=pd.Timestamp(xlim_start))
     ax.set_ylabel(f"Cumulative {label} [GW]")
     ax.set_title(f"Cumulative {label} capacity over time")
+    ax.legend(loc="upper left", fontsize=9)
     ax.grid(alpha=0.3)
     fig.tight_layout()
     for d in (FIG, DOCS):
@@ -144,7 +217,7 @@ def render_top_operators(records, out_name, top_n: int = 30):
     fig, ax = plt.subplots(figsize=(11, 9), dpi=120)
     y = range(len(top))
     ax.barh(y, top["Wind"], color="#0ea5e9", label="Wind")
-    ax.barh(y, top["PV"], left=top["Wind"], color="#f59e0b", label="PV (≥200 kW)")
+    ax.barh(y, top["PV"], left=top["Wind"], color="#f59e0b", label="PV")
     ax.set_yticks(list(y))
     ax.set_yticklabels([n[:55] for n in top.index], fontsize=9)
     ax.set_xlabel("Installed capacity [GW]")
@@ -252,8 +325,7 @@ def render_energy_mix(records, out_name):
     ax.set_xlabel("Installed capacity [GW]")
     ax.set_title(
         f"MaStR energy-type mix — installed capacity at {SNAP.date()}\n"
-        f"(snapshot of {len(records):,} plants in this scrape · "
-        f"PV slice is top 200 k)"
+        f"(snapshot of {len(records):,} plants in this scrape)"
     )
     ax.grid(axis="x", alpha=0.3)
     fig.tight_layout()
@@ -286,7 +358,7 @@ def render_yoy_additions(records, units, out_name, year: int = 2024):
         bins = [0.0, max(1.0, float(geo["mw_added"].max() or 1.0))]
     title = (
         f"Capacity added during {year} per Kreis\n"
-        f"(Wind + PV ≥49 kW from this scrape · {round(geo['mw_added'].sum() / 1e3, 1)} GW total)"
+        f"(Wind + PV · {round(geo['mw_added'].sum() / 1e3, 1)} GW total)"
     )
     _save_choropleth_pair(geo, "mw_added", "RdPu", bins, title,
                           f"New capacity {year} [MW]", out_name)
@@ -407,7 +479,7 @@ def render_pv_orientation(records, out_name):
     axs[1].set_xlabel("Installed capacity [GW]")
     axs[1].set_title("PV capacity by tilt angle")
     axs[1].grid(axis="x", alpha=0.3)
-    fig.suptitle("Solar PV orientation analysis · top 200 k plants", fontsize=13)
+    fig.suptitle("Solar PV orientation analysis", fontsize=13)
     fig.tight_layout()
     for d in (FIG, DOCS):
         fig.savefig(d / out_name, format="svg", bbox_inches="tight")
@@ -1283,10 +1355,10 @@ def render_state_ramp(records, units, out_name):
     fig, ax = plt.subplots(figsize=(11, 6.5), dpi=120)
     ax.stackplot(piv.index, piv.values.T, labels=piv.columns,
                  colors=palette, alpha=0.92, linewidth=0)
-    ax.set_ylabel("Cumulative installed [GW] (Wind + PV ≥49 kW)")
+    ax.set_ylabel("Cumulative installed [GW] (Wind + PV)")
     ax.set_title(
         "Renewable build-out per Bundesland, 2000 → 2025\n"
-        "(MaStR · wind: full · PV: top 200 k by capacity)"
+        "(MaStR · full registry)"
     )
     ax.legend(loc="upper left", ncol=2, fontsize=9, framealpha=0.9)
     ax.grid(alpha=0.3)
@@ -1306,7 +1378,9 @@ def render_pv_by_type(records, out_name):
           .sum().div(1e6).unstack(fill_value=0.0).cumsum()
     )
     piv.index = piv.index.to_timestamp()
-    order = piv.iloc[-1].sort_values(ascending=False).index.tolist()
+    pinned_last = ["building_other", "balkonkraftwerk"]
+    base_order = [c for c in piv.iloc[-1].sort_values(ascending=False).index if c not in pinned_last]
+    order = base_order + [c for c in pinned_last if c in piv.columns]
     piv = piv[order]
 
     colors_map = {
@@ -1325,7 +1399,7 @@ def render_pv_by_type(records, out_name):
     ax = axs[0]
     ax.stackplot(piv.index, piv.values.T, labels=piv.columns,
                  colors=palette, alpha=0.95, linewidth=0)
-    ax.set_ylabel("Cumulative PV [GW] (top 200 k plants)")
+    ax.set_ylabel("Cumulative PV [GW]")
     ax.set_title("PV build-out by installation type, 2000 → 2025")
     ax.legend(loc="upper left", fontsize=9, framealpha=0.92)
     ax.grid(alpha=0.3)
@@ -1363,18 +1437,18 @@ def render_bundesland_chart(records, units, out_name):
         return j.groupby("bundesland_right")["power"].sum().div(1e6)
 
     wind_s = state_totals(records[records["energy_type"] == "Wind"]).rename("Wind")
-    pv_s = state_totals(records[records["energy_type"] == "Solare Strahlungsenergie"]).rename("PV (≥200 kW)")
+    pv_s = state_totals(records[records["energy_type"] == "Solare Strahlungsenergie"]).rename("PV")
     combined = pd.concat([wind_s, pv_s], axis=1).fillna(0.0).sort_values("Wind")
     fig, ax = plt.subplots(figsize=(10, 6), dpi=120)
     y = range(len(combined))
     ax.barh(y, combined["Wind"], color="#0ea5e9", label="Wind")
-    ax.barh(y, combined["PV (≥200 kW)"], left=combined["Wind"], color="#f59e0b", label="PV (≥200 kW)")
+    ax.barh(y, combined["PV"], left=combined["Wind"], color="#f59e0b", label="PV")
     ax.set_yticks(list(y))
     ax.set_yticklabels(combined.index)
     ax.set_xlabel("Installed capacity [GW]")
     ax.set_title(
         f"Installed capacity by Bundesland — {SNAP.date()}\n"
-        "(MaStR · wind: full · PV: top-50k ≥200 kW)"
+        "(MaStR · full registry)"
     )
     ax.legend(loc="lower right")
     ax.grid(axis="x", alpha=0.3)
@@ -1394,7 +1468,7 @@ def main():
 
     render_map(
         records, units, "Solare Strahlungsenergie",
-        title_prefix="PV ≥200 kW",
+        title_prefix="PV",
         cmap="YlOrRd",
         out_name="sample-pv-map.svg",
     )
@@ -1428,7 +1502,7 @@ def main():
     render_density_map(records, units, "Wind", "GnBu",
                        "sample-wind-density.svg", "Wind capacity density")
     render_density_map(records, units, "Solare Strahlungsenergie", "YlOrRd",
-                       "sample-pv-density.svg", "PV capacity density (≥49 kW)")
+                       "sample-pv-density.svg", "PV capacity density")
     export_largest_plants(records, units, "largest-plants.json")
     render_pv_orientation(records, "sample-pv-orientation.svg")
     render_pv_orientation_polar("sample-pv-orientation-polar.svg")
@@ -1449,7 +1523,7 @@ def main():
         records, "Solare Strahlungsenergie",
         palette=["#fef3c7", "#fed7aa", "#fdba74", "#fb923c",
                  "#ea580c", "#9a3412", "#7c2d12"],
-        tech_label="PV (top-200k slice)", noun="plants",
+        tech_label="PV", noun="plants",
         out_name="sample-pv-by-size.svg",
     )
 

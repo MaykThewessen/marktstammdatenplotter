@@ -53,22 +53,19 @@ for p in 1 2 3 4 5 6 7 8; do \
 done; wait
 """
 
-# Battery + other electricity storage. Same endpoint as Stromerzeugung,
-# filtered to Energieträger=2496 (Speicher). Top 200k by power captures
-# everything from grid-scale Pumpspeicher down to ~10 kW home batteries.
+# Battery + other electricity storage — top 200k units by installed power.
+# Covers grid-scale Pumpspeicher down to ~10 kW home batteries.
+# Resumable: existing page-NNN.json files are skipped automatically.
 scrape-bess = """
-mkdir -p data-bess && \
-for p in 1 2 3 4 5 6 7 8; do \
-  curl --get 'https://www.marktstammdatenregister.de/MaStR/Einheit/EinheitJson/GetErweiterteOeffentlicheEinheitStromerzeugung' \
-    --data-urlencode 'sort=Bruttoleistung-desc' \
-    --data-urlencode "page=$p" \
-    --data-urlencode 'pageSize=25000' \
-    --data-urlencode 'group=' \
-    --data-urlencode "filter=Energieträger~eq~'2496'" \
-    --data-urlencode 'forExport=true' \
-    -o "data-bess/data-$p.json" & \
-done; wait
+python fetch_mastr.py \
+  --energy storage --mode full \
+  --sort Bruttoleistung-desc --max-pages 8 \
+  --per-page --out-dir data-bess
 """
+
+# Build BNetzA_MaStR/full-storage.parquet: Zenodo base (2025-02-09) + API delta.
+# Run after scrape-bess or independently for the bulk choropleth path.
+build-full-bess = "python scripts/build_full_bess.py"
 
 # Build germany_kreise.gpkg from BKG VG2500 (1:2.5M Verwaltungsgebiete,
 # stand 31.12). Post-reform Landkreis names (~ 400 rows) — closes the
