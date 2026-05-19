@@ -51,7 +51,7 @@ PRESETS = {
         "kind": "bess",
         "frame_prefix": "bess",
         "frames_dir": "fig/frames-bess",
-        "basename": "bess-2005-may2026",
+        "basename": "bess-2017-may2026",
         "cmap": "BuPu",
         "noun": "units",
         "title": "Installed battery storage energy in Germany",
@@ -59,6 +59,7 @@ PRESETS = {
         "agg_col": "energy_gwh",
         "agg_unit": "GWh",
         "legend_label": "Energy [GWh]",
+        "start_year": 2017,
     },
 }
 
@@ -68,9 +69,9 @@ FINAL_FRAME = date(2026, 5, 1)   # extra frame past END_YEAR for YTD signal
 HOLD_FRAMES = 9
 
 
-def snapshot_dates() -> list[date]:
-    """Yearly Jan-1 frames from START_YEAR through END_YEAR, plus FINAL_FRAME."""
-    dates = [date(y, 1, 1) for y in range(START_YEAR, END_YEAR + 1)]
+def snapshot_dates(start_year: int = START_YEAR) -> list[date]:
+    """Yearly Jan-1 frames from start_year through END_YEAR, plus FINAL_FRAME."""
+    dates = [date(y, 1, 1) for y in range(start_year, END_YEAR + 1)]
     if FINAL_FRAME and FINAL_FRAME > dates[-1]:
         dates.append(FINAL_FRAME)
     return dates
@@ -111,7 +112,7 @@ def render_frames(records, units, cfg) -> tuple[int, Path]:
     agg_unit = cfg.get("agg_unit", "GW")
     legend_label = cfg.get("legend_label", "Capacity [GW]")
 
-    dates = snapshot_dates()
+    dates = snapshot_dates(cfg.get("start_year", START_YEAR))
     agg_max, _ = _aggregate(records, units, dates[-1], cfg)
     positive = agg_max[agg_col][agg_max[agg_col] > 0].to_numpy()
     bins = mastr_plot.jenks_bins(positive, k=8)
@@ -196,6 +197,7 @@ def run_tech(tech: str):
     cfg = PRESETS[tech]
     if cfg["kind"] == "bess":
         records, demo = mastr_plot.load_bess()
+        records = mastr_plot.split_bess_storage(records)["batteries"]
     else:
         records, demo = mastr_plot.load_records()
     if demo:
