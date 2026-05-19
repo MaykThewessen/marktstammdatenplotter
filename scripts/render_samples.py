@@ -1082,7 +1082,7 @@ def render_bess_sector_charts(bess_df, out_summary: str, out_growth: str,
         fig.savefig(d / out_growth, format="svg", bbox_inches="tight")
     plt.close(fig)
 
-    # -- 3. per-sector duration distribution ----------------------------------
+    # -- 3. per-sector duration distribution (overlaid on one axis) ----------
     b = bess_df[
         (bess_df["storage_tech"] == "Batterie")
         & bess_df["install_date"].notna()
@@ -1091,27 +1091,36 @@ def render_bess_sector_charts(bess_df, out_summary: str, out_growth: str,
         & (bess_df["duration_h"] > 0)
         & (bess_df["duration_h"] < 24)
     ]
-    fig, axs = plt.subplots(1, 3, figsize=(15, 4.2), dpi=120)
-    for ax, sec in zip(axs, mastr_plot.BESS_SECTORS):
+    fig, ax = plt.subplots(figsize=(11, 5), dpi=120)
+    bin_edges = np.linspace(0, 10, 50)
+    bin_width = bin_edges[1] - bin_edges[0]
+    legend_handles = []
+    for sec in mastr_plot.BESS_SECTORS:
         sub = b[b["sector"] == sec]
-        if len(sub) == 0:
-            ax.text(0.5, 0.5, "no data", transform=ax.transAxes, ha="center")
-            ax.set_title(sec)
+        if sub.empty:
             continue
-        hist, edges = np.histogram(
-            sub["duration_h"], bins=np.linspace(0, 10, 50),
-            weights=sub["power_kw"] / 1000,
+        hist, _ = np.histogram(
+            sub["duration_h"], bins=bin_edges,
+            weights=sub["power_kw"] / 1000,  # MW per bin
         )
-        ax.bar(edges[:-1], hist, width=np.diff(edges), align="edge",
-               color=BESS_SECTOR_COLORS[sec],
-               edgecolor="#1e293b", linewidth=0.3)
-        ax.set_xlabel("Duration [h]")
-        ax.set_ylabel("Installed power per bin [MW]")
-        ax.set_title(
-            f"{sec}\n{len(sub):,} units · {sub['power_kw'].sum() / 1e6:.2f} GW"
+        bars = ax.bar(
+            bin_edges[:-1], hist, width=bin_width, align="edge",
+            color=BESS_SECTOR_COLORS[sec], alpha=0.55,
+            edgecolor=BESS_SECTOR_COLORS[sec], linewidth=0.6,
+            label=f"{sec} · {len(sub):,} units · "
+                  f"{sub['power_kw'].sum() / 1e6:.2f} GW",
         )
-        ax.grid(alpha=0.3)
-    fig.suptitle("Per-sector BESS duration (Batterie only)", fontsize=13)
+        legend_handles.append(bars)
+    ax.set_xlabel("Duration [h] = energy / power")
+    ax.set_ylabel("Installed power per bin [MW]")
+    ax.set_title(
+        f"BESS duration distribution by sector — {snap.date()} (Batterie only)\n"
+        "HSS clusters at ~1 h (paired to PV self-consumption) · "
+        "CSS at 1.5–2 h · LSS spreads across 1–4 h"
+    )
+    ax.legend(loc="upper right", fontsize=9, framealpha=0.92)
+    ax.grid(alpha=0.3)
+    ax.set_xlim(0, 10)
     fig.tight_layout()
     for d in (FIG, DOCS):
         fig.savefig(d / out_duration, format="svg", bbox_inches="tight")
