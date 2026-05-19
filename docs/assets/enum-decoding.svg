@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12">
+  <defs>
+    <filter id="sh3" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.1"/>
+    </filter>
+    <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="760" fill="#f8fafc"/>
+
+  <text x="600" y="34" text-anchor="middle" font-size="20" font-weight="700" fill="#1e293b">
+    MaStR Enum Decoding (parser.PowerPlant)
+  </text>
+  <text x="600" y="56" text-anchor="middle" font-size="13" fill="#64748b">
+    Numeric codes → human-readable strings · unknown → None
+  </text>
+
+  <!-- Box template generator function via static positioning -->
+
+  <!-- Leistungsbegrenzung -->
+  <g filter="url(#sh3)">
+    <rect x="40" y="90" width="340" height="200" rx="10" fill="#fff" stroke="#94a3b8"/>
+    <rect x="40" y="90" width="340" height="32" rx="10" fill="#1e293b"/>
+    <text x="210" y="111" text-anchor="middle" fill="#fff" font-weight="700">Leistungsbegrenzung · inverter factor</text>
+    <g font-size="12" fill="#0f172a">
+      <text x="60" y="148"><tspan font-weight="700">805</tspan>  →  × 0.5</text>
+      <text x="60" y="170"><tspan font-weight="700">804</tspan>  →  × 0.6</text>
+      <text x="60" y="192"><tspan font-weight="700">803</tspan>  →  × 0.7</text>
+      <text x="60" y="214"><tspan font-weight="700">802</tspan>  →  × 1.0 (no limit)</text>
+      <text x="60" y="236"><tspan font-weight="700">1535</tspan>  →  × 1.0 (Sonstige)</text>
+      <text x="60" y="266" fill="#64748b" font-style="italic">applied to Nettonennleistung</text>
+    </g>
+  </g>
+
+  <!-- Hauptausrichtung -->
+  <g filter="url(#sh3)">
+    <rect x="420" y="90" width="360" height="380" rx="10" fill="#fff" stroke="#94a3b8"/>
+    <rect x="420" y="90" width="360" height="32" rx="10" fill="#1e293b"/>
+    <text x="600" y="111" text-anchor="middle" fill="#fff" font-weight="700">HauptausrichtungSolarModule · facing</text>
+    <g font-size="12" fill="#0f172a">
+      <text x="440" y="148"><tspan font-weight="700">695</tspan>  Nord       →  0°</text>
+      <text x="440" y="170"><tspan font-weight="700">696</tspan>  Nord-Ost   →  45°</text>
+      <text x="440" y="192"><tspan font-weight="700">697</tspan>  Ost        →  90°</text>
+      <text x="440" y="214"><tspan font-weight="700">698</tspan>  Süd-Ost    →  135°</text>
+      <text x="440" y="236"><tspan font-weight="700">699</tspan>  Süd        →  180°</text>
+      <text x="440" y="258"><tspan font-weight="700">700</tspan>  Süd-West   →  225°</text>
+      <text x="440" y="280"><tspan font-weight="700">701</tspan>  West       →  270°</text>
+      <text x="440" y="302"><tspan font-weight="700">702</tspan>  Nord-West  →  315°</text>
+      <text x="440" y="324"><tspan font-weight="700">703</tspan>  nachgeführt →  "tracked"</text>
+      <text x="440" y="346"><tspan font-weight="700">704</tspan>  Ost-West   →  "east-west"</text>
+      <text x="440" y="376" fill="#64748b" font-style="italic">unmapped → None</text>
+    </g>
+  </g>
+
+  <!-- HauptneigungswinkelSolarmodule -->
+  <g filter="url(#sh3)">
+    <rect x="820" y="90" width="340" height="260" rx="10" fill="#fff" stroke="#94a3b8"/>
+    <rect x="820" y="90" width="340" height="32" rx="10" fill="#1e293b"/>
+    <text x="990" y="111" text-anchor="middle" fill="#fff" font-weight="700">HauptneigungswinkelSolarmodule · tilt</text>
+    <g font-size="12" fill="#0f172a">
+      <text x="840" y="148"><tspan font-weight="700">810</tspan>  &lt; 20°       →  (0, 19)</text>
+      <text x="840" y="170"><tspan font-weight="700">809</tspan>  20–40°       →  (20, 40)</text>
+      <text x="840" y="192"><tspan font-weight="700">808</tspan>  40–60°       →  (40, 60)</text>
+      <text x="840" y="214"><tspan font-weight="700">807</tspan>  &gt; 60°       →  (61, 90)</text>
+      <text x="840" y="236"><tspan font-weight="700">806</tspan>  Fassadenintegriert →  90</text>
+      <text x="840" y="258"><tspan font-weight="700">811</tspan>  Nachgeführt  →  "tracked"</text>
+      <text x="840" y="288" fill="#64748b" font-style="italic">unmapped → None</text>
+    </g>
+  </g>
+
+  <!-- Installation type -->
+  <g filter="url(#sh3)">
+    <rect x="40" y="320" width="340" height="240" rx="10" fill="#fff" stroke="#94a3b8"/>
+    <rect x="40" y="320" width="340" height="32" rx="10" fill="#1e293b"/>
+    <text x="210" y="341" text-anchor="middle" fill="#fff" font-weight="700">ArtDerSolaranlageId · installation_type</text>
+    <g font-size="12" fill="#0f172a">
+      <text x="60" y="378"><tspan font-weight="700">853</tspan>   →  "building"</text>
+      <text x="60" y="400"><tspan font-weight="700">2484</tspan>  →  "building_other"</text>
+      <text x="60" y="422"><tspan font-weight="700">852</tspan>   →  "free"</text>
+      <text x="60" y="444"><tspan font-weight="700">3002</tspan>  →  "water"</text>
+      <text x="60" y="466"><tspan font-weight="700">3058</tspan>  →  "parking_lot"</text>
+      <text x="60" y="488"><tspan font-weight="700">2961</tspan>  →  "balkonkraftwerk"</text>
+      <text x="60" y="518" fill="#64748b" font-style="italic">unmapped → None</text>
+    </g>
+  </g>
+
+  <!-- Building type -->
+  <g filter="url(#sh3)">
+    <rect x="420" y="500" width="360" height="220" rx="10" fill="#fff" stroke="#94a3b8"/>
+    <rect x="420" y="500" width="360" height="32" rx="10" fill="#1e293b"/>
+    <text x="600" y="521" text-anchor="middle" fill="#fff" font-weight="700">NutzungsbereichGebSA · building_type</text>
+    <g font-size="12" fill="#0f172a">
+      <text x="440" y="558"><tspan font-weight="700">713</tspan>  →  "household"</text>
+      <text x="440" y="580"><tspan font-weight="700">714</tspan>  →  "commercial"</text>
+      <text x="440" y="602"><tspan font-weight="700">715</tspan>  →  "industry"</text>
+      <text x="440" y="624"><tspan font-weight="700">716</tspan>  →  "farming"</text>
+      <text x="440" y="646"><tspan font-weight="700">717</tspan>  →  "public"</text>
+      <text x="440" y="668"><tspan font-weight="700">718</tspan>  →  "other"</text>
+    </g>
+  </g>
+
+  <!-- WindAnLandOderSeeId -->
+  <g filter="url(#sh3)">
+    <rect x="820" y="380" width="340" height="200" rx="10" fill="#fff" stroke="#94a3b8"/>
+    <rect x="820" y="380" width="340" height="32" rx="10" fill="#1e293b"/>
+    <text x="990" y="401" text-anchor="middle" fill="#fff" font-weight="700">WindAnLandOderSeeId · off_shore</text>
+    <g font-size="12" fill="#0f172a">
+      <text x="840" y="438"><tspan font-weight="700">889</tspan>  + StandortAnonymisiert</text>
+      <text x="860" y="458">  startswith "Nordsee" → "Nordsee"</text>
+      <text x="860" y="478">  startswith "Ostsee"  → "Ostsee"</text>
+      <text x="840" y="510" fill="#64748b" font-style="italic">on-shore → None</text>
+      <text x="840" y="540" fill="#64748b" font-style="italic">offshore lat/lon are anonymized;</text>
+      <text x="840" y="558" fill="#64748b" font-style="italic">notebook places markers in synth zones.</text>
+    </g>
+  </g>
+
+  <!-- AnlagenbetreiberPersonenArt -->
+  <g filter="url(#sh3)">
+    <rect x="40" y="600" width="340" height="120" rx="10" fill="#fff" stroke="#94a3b8"/>
+    <rect x="40" y="600" width="340" height="32" rx="10" fill="#1e293b"/>
+    <text x="210" y="621" text-anchor="middle" fill="#fff" font-weight="700">AnlagenbetreiberPersonenArt</text>
+    <g font-size="12" fill="#0f172a">
+      <text x="60" y="658"><tspan font-weight="700">518</tspan>  →  is_private = True</text>
+      <text x="60" y="680" fill="#64748b" font-style="italic">anything else → False</text>
+    </g>
+  </g>
+
+  <!-- Footer note -->
+  <text x="820" y="700" font-size="12" fill="#64748b" font-style="italic">Source: parser.py · PowerPlant.from_json</text>
+</svg>

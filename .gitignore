@@ -1,17 +1,44 @@
-# Raw data and downloaded datasets
-non-pv-data/
-BNetzA_MaStR/bnetza_mastr_*
-BNetzA_MaStR/solar.parquet
-*.gpkg
-*.json
-
-# Generated outputs
-fig/
-*.csv
-*.gif
-*.png
+# macOS
+.DS_Store
 
 # Python
 __pycache__/
-*.pyc
+*.py[cod]
+*.egg-info/
+.pytest_cache/
 .ipynb_checkpoints/
+
+# Marimo
+__marimo__/
+
+# Per-frame raster dumps (regenerable from notebooks)
+fig/
+fig/frames/
+fig/frames-pv/
+fig/frames-bess/
+
+# Scrape outputs
+*.gif
+*.png
+*.csv
+*.json
+data-bess/
+data-delta-pv/
+data-delta-bess/
+data-delta-wind/
+
+# open-MaStR Zenodo bulk dump (regenerable from Zenodo record 14783581)
+BNetzA_MaStR/
+non-pv-data/
+
+# OSM artifacts
+*.o5m
+*.osm
+*.osm.pbf
+germany-latest.*
+germany_admin_levels_*.osm
+*.gpkg
+
+# Virtual envs
+.venv/
+.env

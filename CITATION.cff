@@ -1,0 +1,50 @@
+cff-version: 1.2.0
+title: Marktstammdatenplotter
+message: >-
+  If you use this code or the rendered figures in your work,
+  please cite both the software (this entry) and the upstream
+  Marktstammdatenregister dataset (see references below).
+type: software
+authors:
+  - given-names: Paul
+    family-names: Emmerich
+    affiliation: original upstream author
+  - given-names: Mayk
+    family-names: Thewessen
+    affiliation: Birdview Energy
+    email: m.thewessen@birdviewenergy.ai
+abstract: >-
+  Python toolkit that scrapes the German Marktstammdatenregister
+  (MaStR) public registry of electricity-generating units, joins
+  records to OSM-derived county polygons, and renders time-lapse
+  choropleth maps of installed wind and solar capacity. Ships
+  with interactive marimo notebooks (PV + Wind explorers), a
+  Read-the-Docs-styled GitHub Pages site, animated GIFs, and a
+  weekly CI refresh.
+keywords:
+  - germany
+  - renewable-energy
+  - wind-power
+  - photovoltaic
+  - geospatial
+  - marktstammdatenregister
+  - choropleth
+  - marimo
+license: research-quality
+repository-code: "https://github.com/MaykThewessen/marktstammdatenplotter"
+url: "https://maykthewessen.github.io/marktstammdatenplotter/"
+references:
+  - type: data
+    title: Marktstammdatenregister
+    authors:
+      - name: Bundesnetzagentur für Elektrizität, Gas, Telekommunikation, Post und Eisenbahnen
+    url: "https://www.marktstammdatenregister.de/"
+    notes: >-
+      Public registry of electricity-generating units in Germany.
+      Data © Bundesnetzagentur.
+  - type: data
+    title: OpenStreetMap administrative boundaries
+    authors:
+      - name: OpenStreetMap contributors
+    url: "https://www.openstreetmap.org/"
+    license: ODbL-1.0

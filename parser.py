@@ -170,3 +170,73 @@ def load_data(data_dir, max_files=1000000):
                     merged_data.append(bkw)
     print(f"Entries loaded from files: {len(merged_data)}")
     return merged_data
+
+
+# ---------------------------------------------------------------------------
+# Battery / energy-storage units (Energieträger 2496)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class BatteryUnit:
+    id: int
+    name: str
+    power_kw: float                  # Bruttoleistung
+    energy_kwh: float                # NutzbareSpeicherkapazitaet
+    install_date: date | None
+    planned_date: date | None
+    removal_date: date | None
+    storage_tech: str | None         # Batterie / Pumpspeicher / Wasserstoffspeicher / ...
+    battery_tech_code: int | None    # raw Batterietechnologie code (lookup TBD)
+    feed_in_mode: str | None         # Volleinspeisung / Überschusseinspeisung / ...
+    status: str | None               # In Betrieb / In Planung / ...
+    voltage_level: str | None        # Niederspannung / Mittelspannung / ... / Höchstspannung
+    longitude: float | None
+    latitude: float | None
+    postal_code: str
+    municipality: str | None
+    landkreis: str | None
+    bundesland: str | None
+    owner_name: str
+    is_private: bool
+
+    @classmethod
+    def from_json(cls, entry: dict):
+        if entry.get("EnergietraegerId") != 2496:
+            return None
+        return cls(
+            id=entry["Id"],
+            name=entry.get("EinheitName") or "",
+            power_kw=entry.get("Bruttoleistung") or 0.0,
+            energy_kwh=entry.get("NutzbareSpeicherkapazitaet") or 0.0,
+            install_date=parse_dotnet_date(entry.get("InbetriebnahmeDatum")),
+            planned_date=parse_dotnet_date(entry.get("GeplantesInbetriebsnahmeDatum")),
+            removal_date=parse_dotnet_date(entry.get("EndgueltigeStilllegungDatum")),
+            storage_tech=entry.get("StromspeichertechnologieBezeichnung"),
+            battery_tech_code=entry.get("Batterietechnologie"),
+            feed_in_mode=entry.get("VollTeilEinspeisungBezeichnung"),
+            status=entry.get("BetriebsStatusName"),
+            voltage_level=entry.get("SpannungsebenenNamen"),
+            longitude=entry.get("Laengengrad"),
+            latitude=entry.get("Breitengrad"),
+            postal_code=entry.get("Plz") or "",
+            municipality=entry.get("Gemeinde"),
+            landkreis=entry.get("Landkreis"),
+            bundesland=entry.get("Bundesland"),
+            owner_name=entry.get("AnlagenbetreiberName") or "",
+            is_private=entry.get("AnlagenbetreiberPersonenArt") == 518,
+        )
+
+
+def load_bess(data_dir, max_files=1000000):
+    """Load BatteryUnit records from a directory of MaStR JSON scrapes."""
+    merged = []
+    json_files = sorted(glob(os.path.join(data_dir, "*.json")))[:max_files]
+    for file_path in json_files:
+        with open(file_path, "r", encoding="utf-8") as f:
+            content = json.load(f)
+            for entry in content.get("Data", []):
+                unit = BatteryUnit.from_json(entry)
+                if unit:
+                    merged.append(unit)
+    print(f"BESS entries loaded from files: {len(merged)}")
+    return merged

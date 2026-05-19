@@ -1,0 +1,972 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Marktstammdatenplotter — Documentation</title>
+<meta name="description" content="Animated choropleth maps of German wind & solar capacity from the Marktstammdatenregister (MaStR).">
+<meta name="author" content="Mayk Thewessen">
+<meta name="theme-color" content="#2980b9">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Marktstammdatenplotter — German wind & PV capacity maps">
+<meta property="og:description" content="Interactive choropleth maps + animated GIFs of installed wind and solar capacity per Kreis, live from the Marktstammdatenregister.">
+<meta property="og:url" content="https://maykthewessen.github.io/marktstammdatenplotter/">
+<meta property="og:image" content="https://maykthewessen.github.io/marktstammdatenplotter/assets/wind-2005-may2026.gif">
+<meta property="og:image:alt" content="Animated map of installed wind capacity in Germany, 2005 to 2025">
+<meta property="og:site_name" content="Marktstammdatenplotter">
+
+<!-- Twitter / X -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Marktstammdatenplotter">
+<meta name="twitter:description" content="Wind & PV capacity per Kreis, live from MaStR.">
+<meta name="twitter:image" content="https://maykthewessen.github.io/marktstammdatenplotter/assets/wind-2005-may2026.gif">
+
+<link rel="canonical" href="https://maykthewessen.github.io/marktstammdatenplotter/">
+<link rel="stylesheet" href="assets/style.css">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="alternate icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%232980b9'/%3E%3Ctext x='8' y='12' text-anchor='middle' font-family='sans-serif' font-size='10' font-weight='700' fill='white'%3EM%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle navigation">☰ Menu</button>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <h1>Marktstammdatenplotter</h1>
+      <p>v0.1 · German MaStR maps</p>
+    </div>
+    <div class="sidebar-search">
+      <input id="sidebar-search" type="search" placeholder="Quick filter…" autocomplete="off">
+    </div>
+    <nav class="sidebar-nav" aria-label="Sections">
+      <div class="section">Overview</div>
+      <ul>
+        <li><a href="#introduction">Introduction</a></li>
+        <li><a href="#what-it-does">What it does</a></li>
+        <li><a href="#layout">Repository layout</a></li>
+      </ul>
+      <div class="section">Pipeline</div>
+      <ul>
+        <li><a href="#pipeline">Pipeline overview</a></li>
+        <li><a href="#scraping">Scraping MaStR</a></li>
+        <li><a href="#osm">OSM boundaries</a></li>
+        <li><a href="#parser">Parser &amp; enums</a></li>
+        <li><a href="#notebook">Notebook flow</a></li>
+        <li><a href="#animation">Animation</a></li>
+      </ul>
+      <div class="section">Interactive notebooks</div>
+      <ul>
+        <li><a href="pv.html">PV explorer (marimo)</a></li>
+        <li><a href="wind.html">Wind explorer (marimo)</a></li>
+        <li><a href="#notebooks">About the notebooks</a></li>
+      </ul>
+      <div class="section">Data</div>
+      <ul>
+        <li><a href="#energy-mix">Energy-type mix</a></li>
+        <li><a href="#state-ramp">Build-out per Bundesland</a></li>
+        <li><a href="#pv-by-type">PV by installation type</a></li>
+        <li><a href="#pv-orientation">PV orientation</a></li>
+        <li><a href="#wind-age">Wind fleet age</a></li>
+        <li><a href="#bess">Battery storage (BESS)</a>
+          <ul>
+            <li><a href="#bess">3-sector split (HSS/CSS/LSS)</a></li>
+          </ul>
+        </li>
+        <li><a href="#psh">Pumped-hydro storage (PSH)</a></li>
+        <li><a href="#density">Capacity density (MW/km²)</a></li>
+        <li><a href="#yoy-additions">2024 additions</a></li>
+        <li><a href="#largest-plants">Largest individual plants</a></li>
+        <li><a href="#kreise-rank">Top Kreise by capacity</a></li>
+        <li><a href="#operators">Top operators</a></li>
+        <li><a href="#offshore">Offshore wind</a></li>
+        <li><a href="#downloads">Bulk downloads</a></li>
+      </ul>
+      <div class="section">Reference</div>
+      <ul>
+        <li><a href="#powerplant">PowerPlant dataclass</a></li>
+        <li><a href="#gotchas">Gotchas</a></li>
+        <li><a href="#troubleshooting">Troubleshooting</a></li>
+      </ul>
+      <div class="section">Project</div>
+      <ul>
+        <li><a href="https://github.com/MaykThewessen/marktstammdatenplotter">GitHub repository</a></li>
+        <li><a href="https://www.marktstammdatenregister.de/">MaStR registry</a></li>
+        <li><a href="https://github.com/emmericp/marktstammdatenplotter">Upstream fork</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+    <div class="content">
+      <div class="breadcrumb">
+        <a href="#">Docs</a> » <span>Marktstammdatenplotter</span>
+      </div>
+
+      <section id="introduction">
+        <h1>Marktstammdatenplotter</h1>
+        <p>
+          Animated choropleth maps of installed wind &amp; solar capacity in
+          Germany, driven by data scraped from the public
+          <a href="https://www.marktstammdatenregister.de/">Marktstammdatenregister</a> (MaStR).
+        </p>
+        <div class="badges">
+          <a href="https://github.com/MaykThewessen/marktstammdatenplotter"><img alt="GitHub" src="https://img.shields.io/badge/source-github-181717?logo=github"></a>
+          <img alt="Python" src="https://img.shields.io/badge/python-3.11+-blue?logo=python&amp;logoColor=white">
+          <img alt="Data" src="https://img.shields.io/badge/source-MaStR-orange">
+          <img alt="License" src="https://img.shields.io/badge/license-research--quality-lightgrey">
+        </div>
+
+        <div class="admonition warning">
+          <div class="title">⚠ Caution</div>
+          Research-quality code — designed to run once. Most of it is AI-generated
+          and occasionally very verbose. Nothing has been cleaned up. Good luck.
+        </div>
+      </section>
+
+      <section id="what-it-does">
+        <h2>What it does</h2>
+        <p>
+          The MaStR registry contains every grid-connected electricity-generating
+          unit in Germany — millions of solar panels, tens of thousands of wind
+          turbines, plus hydro, biomass, gas and more. Each record carries an
+          install date, capacity in kW, geographic coordinates, and a pile of
+          enum-encoded metadata.
+        </p>
+        <p>This repo:</p>
+        <ol>
+          <li><b>scrapes</b> the MaStR public JSON API,</li>
+          <li><b>decodes</b> the enum-heavy rows into a clean <code>PowerPlant</code> dataclass (<code>parser.py</code>),</li>
+          <li><b>joins</b> turbines to German county polygons extracted from OSM,</li>
+          <li><b>renders</b> one choropleth PNG per month from 2000 to today, and</li>
+          <li><b>assembles</b> the frames into an animated GIF with <code>ffmpeg</code>.</li>
+        </ol>
+      </section>
+
+      <section id="layout">
+        <h2>Repository layout</h2>
+        <table>
+          <thead><tr><th>Path</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><code>parser.py</code></td><td><code>PowerPlant</code> dataclass + JSON-to-record decoder</td></tr>
+            <tr><td><code>wind.ipynb</code></td><td>End-to-end notebook: load → join → plot → save frames</td></tr>
+            <tr><td><code>fig/</code></td><td>Rendered PNG/GIF outputs (gitignored) plus pipeline SVGs</td></tr>
+            <tr><td><code>docs/</code></td><td>This site (served from GitHub Pages)</td></tr>
+            <tr><td><code>README.md</code></td><td>User-facing quickstart</td></tr>
+            <tr><td><code>CLAUDE.md</code></td><td>Conventions for Claude Code agents</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="pipeline">
+        <h2>Pipeline overview</h2>
+        <p>
+          Three external sources flow into a single rendering loop. Cached
+          artifacts (<code>data-*.json</code>, <code>germany_kreise.gpkg</code>) sit between scrape
+          and analyze so the slow steps are run-once.
+        </p>
+        <figure>
+          <object type="image/svg+xml" data="assets/flowchart-data-pipeline.svg" aria-label="Data pipeline flowchart"></object>
+          <figcaption>Figure 1 — End-to-end data pipeline.</figcaption>
+        </figure>
+
+        <h3>Module architecture</h3>
+        <figure>
+          <object type="image/svg+xml" data="assets/architecture.svg" aria-label="Module architecture"></object>
+          <figcaption>Figure 2 — Four layers: ingest, parse, analyze, render.</figcaption>
+        </figure>
+      </section>
+
+      <section id="scraping">
+        <h2>Scraping MaStR</h2>
+        <p>
+          The registry offers a full XML export, but the API filters server-side
+          and returns JSON instead of XML, so this repo scrapes that instead:
+        </p>
+<pre><code>seq 7 | xargs -P 4 -I{} curl --get \
+  'https://www.marktstammdatenregister.de/MaStR/Einheit/EinheitJson/GetErweiterteOeffentlicheEinheitStromerzeugung' \
+  --data-urlencode 'sort=' \
+  --data-urlencode 'page={}' \
+  --data-urlencode 'pageSize=25000' \
+  --data-urlencode 'group=' \
+  --data-urlencode 'filter=Energieträger~neq~\'2495\'~and~Energieträger~neq~\'2496\'' \
+  --data-urlencode 'forExport=true' -o data-{}.json</code></pre>
+
+        <div class="kv">
+          <div class="k">pageSize</div><div class="v">25 000 rows per page</div>
+          <div class="k">-P 4</div><div class="v">four parallel curl workers</div>
+          <div class="k">filter</div><div class="v">excludes Energieträger codes 2495 + 2496</div>
+          <div class="k">forExport=true</div><div class="v">flat JSON; no HTML scaffolding</div>
+        </div>
+
+        <div class="admonition note">
+          <div class="title">Note</div>
+          The API gets slow under heavy load. Cache JSON on disk and skip files
+          that already exist when re-running.
+        </div>
+      </section>
+
+      <section id="osm">
+        <h2>OSM boundaries</h2>
+        <p>
+          County boundaries come from a Germany OSM extract (e.g.
+          <a href="https://download.geofabrik.de/europe/germany.html">geofabrik.de</a>).
+          Filter to admin levels 4 (state) and 6 (Kreis), then export to GeoPackage:
+        </p>
+<pre><code>osmfilter germany-latest.o5m \
+  --keep-nodes="boundary=administrative and ( admin_level=6 or admin_level=4 )" \
+  --keep-ways="boundary=administrative and ( admin_level=6 or admin_level=4 )" \
+  --keep-relations="boundary=administrative and ( admin_level=6 or admin_level=4 )" \
+  --drop-version --drop-author \
+  -o=germany_admin_levels_4_6.osm
+
+ogr2ogr -f GPKG germany_kreise.gpkg germany_admin_levels_4_6.osm \
+  -sql "SELECT name, admin_level, boundary FROM multipolygons \
+        WHERE boundary = 'administrative' \
+        AND (admin_level = '6' \
+             OR (admin_level = '4' AND name IN ('Berlin','Hamburg','Bremen')))" \
+  -nlt MULTIPOLYGON -overwrite -nln multipolygons</code></pre>
+
+        <p>
+          Kreise are <code>admin_level=6</code>. The three city-states
+          (Berlin, Hamburg, Bremen) sit at <code>admin_level=4</code> and get
+          pulled in by name.
+        </p>
+      </section>
+
+      <section id="parser">
+        <h2>Parser &amp; enums</h2>
+        <p>
+          MaStR fields are numeric enum codes. <code>parser.py</code> decodes the
+          six enums that matter for plotting, plus the .NET-style
+          <code>/Date(ms)/</code> timestamps.
+        </p>
+        <figure>
+          <object type="image/svg+xml" data="assets/enum-decoding.svg" aria-label="Enum decoding map"></object>
+          <figcaption>Figure 3 — MaStR enum codes mapped to human-readable values.</figcaption>
+        </figure>
+        <p>
+          Unknown codes resolve to <code>None</code> rather than raising — the
+          registry adds codes over time, so the decoder must tolerate them.
+        </p>
+      </section>
+
+      <section id="notebook">
+        <h2>Notebook flow</h2>
+        <p>
+          <code>wind.ipynb</code> loads cached JSON, builds a GeoDataFrame of
+          turbines, joins to <code>germany_kreise.gpkg</code>, aggregates by
+          county, and writes one PNG per month from 2000-01-01 to today.
+        </p>
+        <figure>
+          <object type="image/svg+xml" data="assets/timeline-rendering.svg" aria-label="Frame loop"></object>
+          <figcaption>Figure 4 — Per-frame loop and final ffmpeg assembly.</figcaption>
+        </figure>
+        <p>
+          Bins are pre-computed once on a representative date so the legend stays
+          stable across all frames — otherwise the same color would mean different
+          megawatts in January 2005 versus January 2025.
+        </p>
+      </section>
+
+      <section id="animation">
+        <h2>Animation</h2>
+        <p>
+          PNGs land in <code>fig/</code> with names like
+          <code>wind-2007-04.png</code>. <code>ffmpeg</code> insists on
+          <code>frame%03d.png</code>, so the assembly script renames frames in a
+          tmpdir, repeats the final frame ~120 times for a 4-second hold, and
+          runs <code>palettegen</code> + <code>paletteuse</code> for a clean
+          palette:
+        </p>
+<pre><code>set -l file wind
+set -l frames_to_repeat 120
+mktemp -d | read -l temp_dir
+and cp "$file"-*.png $temp_dir
+and begin
+    set -l i 1
+    set -l last_frame_path ""
+    for f in (ls "$temp_dir/$file"*.png | sort)
+        mv $f (printf "%s/frame%03d.png" $temp_dir $i)
+        set last_frame_path (printf "%s/frame%03d.png" $temp_dir $i)
+        set i (math $i + 1)
+    end
+    set -l current_duplicate_index $i
+    for j in (seq 1 $frames_to_repeat)
+        cp "$last_frame_path" (printf "%s/frame%03d.png" $temp_dir $current_duplicate_index)
+        set current_duplicate_index (math $current_duplicate_index + 1)
+    end
+end
+and ffmpeg -framerate 30 -i "$temp_dir/frame%03d.png" \
+    -vf "scale=-1:1200:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse=dither=none" \
+    -loop 0 -y "$file".gif
+and rm -rf "$temp_dir"</code></pre>
+
+        <div class="admonition note">
+          <div class="title">Fun fact</div>
+          This renaming dance exists because PNGs carry no timestamp metadata. JPGs
+          with EXIF would just work with ffmpeg's glob pattern.
+        </div>
+      </section>
+
+      <section id="notebooks">
+        <h2>Interactive notebooks</h2>
+        <p>
+          Two <a href="https://marimo.io/">marimo</a> reactive notebooks ship with
+          this repo. They render directly to standalone HTML, so the published
+          docs site below contains a fully self-contained interactive map for
+          each technology. Edit the source <code>.py</code> files locally to add
+          your own controls.
+        </p>
+        <table>
+          <thead>
+            <tr><th>Notebook</th><th>Source</th><th>Live HTML</th><th>Controls</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><b>PV explorer</b></td>
+              <td><code>pv.py</code></td>
+              <td><a href="pv.html">pv.html</a></td>
+              <td>date · installation type · bin count · colormap</td>
+            </tr>
+            <tr>
+              <td><b>Wind explorer</b></td>
+              <td><code>wind.py</code></td>
+              <td><a href="wind.html">wind.html</a></td>
+              <td>date · onshore/offshore · bin count · colormap</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Run locally</h3>
+<pre><code>python -m marimo edit pv.py     # reactive editor
+python -m marimo edit wind.py
+python -m marimo run pv.py      # read-only app
+python -m marimo export html pv.py -o docs/pv.html</code></pre>
+
+        <div class="admonition note">
+          <div class="title">Demo mode</div>
+          When no <code>data-*.json</code> or <code>germany_kreise.gpkg</code> are
+          present, the notebooks fall back to a synthetic demo dataset (~4 600
+          plants on a 6×6 grid over Germany) so they still render. A banner at the
+          top of each notebook tells you which mode is active.
+        </div>
+
+        <h3>Sample renders (real MaStR data)</h3>
+        <p>
+          Generated from a May 2026 scrape of the public Marktstammdatenregister
+          API. <b>Wind</b> uses the full registry slice — 42 495 turbines, every
+          Kreis covered. <b>PV</b> uses the top 50 000 utility-scale plants
+          sorted by capacity (every plant ≥ 200 kW, ≈ 70 GW combined),
+          excluding the long tail of 6 M rooftop and balcony installations.
+        </p>
+
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-wind-map.svg" aria-label="Wind choropleth (real data)"></object>
+          <figcaption>Figure 5 — Installed wind capacity per Kreis, 2026-05-01 (32 107 turbines, 79.7 GW total).</figcaption>
+        </figure>
+
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-wind-growth.svg" aria-label="Cumulative wind growth (real data)"></object>
+          <figcaption>Figure 6 — Cumulative wind capacity in Germany, onshore vs. offshore (real registry).</figcaption>
+        </figure>
+
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-pv-map.svg" aria-label="PV choropleth (top 50k by capacity)"></object>
+          <figcaption>Figure 7 — PV capacity per Kreis, top 50 000 plants ≥ 200 kW (≈ 70 GW).</figcaption>
+        </figure>
+
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-pv-growth.svg" aria-label="Cumulative PV growth (top 50k)"></object>
+          <figcaption>Figure 8 — Cumulative PV capacity over time, top 50 000 plants ≥ 200 kW.</figcaption>
+        </figure>
+
+        <h3>Per-unit size-bin distribution</h3>
+        <p>
+          Same size-bin axis as the BESS chart above. Wind sits almost
+          entirely in the 1-10 MW bin (75 GW of the 79.7 GW total).
+          PV is spread across 10 kW – 100 MW — utility ground-mount
+          (1-10 MW + 10-100 MW) carries roughly equal weight, with
+          ≥ 100 MW reserved for a handful of mega-parks.
+        </p>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-wind-by-size.svg" aria-label="Wind size-bin breakdown"></object>
+          <figcaption>Figure 8a — Wind installed power by per-turbine size-bin.</figcaption>
+        </figure>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-pv-by-size.svg" aria-label="PV size-bin breakdown"></object>
+          <figcaption>Figure 8b — PV (top-200k slice) installed power by per-plant size-bin. Sub-49 kW residential excluded by the scrape sort cut-off.</figcaption>
+        </figure>
+
+        <h3>Installed capacity by Bundesland</h3>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-by-bundesland.svg" aria-label="Capacity by Bundesland"></object>
+          <figcaption>Figure 9 — Wind + PV (≥ 200 kW) per state, snapshot 2026-05-01. Niedersachsen leads wind (12.7 GW); Bayern leads PV (12.0 GW).</figcaption>
+        </figure>
+
+        <h3>21 years of wind growth + YTD 2026</h3>
+        <figure>
+          <video autoplay loop muted playsinline preload="metadata"
+                 poster="assets/wind-2005-may2026.gif"
+                 style="max-width:100%;border:1px solid var(--rtd-border);border-radius:4px;background:#fff;">
+            <source src="assets/wind-2005-may2026.mp4" type="video/mp4">
+            <img src="assets/wind-2005-may2026.gif" alt="Wind capacity 2005 to May 2026 animation" style="max-width:100%">
+          </video>
+          <figcaption>
+            Figure 10 — Yearly frames of installed wind capacity per Kreis,
+            2005 → 2025, plus a final May-2026 YTD snapshot. Fixed Jenks bins.
+            Also available:
+            <a href="assets/wind-2005-may2026.mp4">.mp4</a> ·
+            <a href="assets/wind-2005-may2026.gif">.gif</a>.
+          </figcaption>
+        </figure>
+
+        <h3>21 years of PV growth + YTD 2026</h3>
+        <figure>
+          <video autoplay loop muted playsinline preload="metadata"
+                 poster="assets/pv-2005-may2026.gif"
+                 style="max-width:100%;border:1px solid var(--rtd-border);border-radius:4px;background:#fff;">
+            <source src="assets/pv-2005-may2026.mp4" type="video/mp4">
+            <img src="assets/pv-2005-may2026.gif" alt="PV capacity 2005 to May 2026 animation" style="max-width:100%">
+          </video>
+          <figcaption>
+            Figure 11 — Yearly frames of installed PV capacity per Kreis,
+            2005 → 2025, plus a final May-2026 YTD snapshot. Covers the
+            200 000 largest plants (≥ 49 kW, ≈ 73 GW). Rooftop / balcony
+            long tail under 49 kW is excluded — capturing it would need
+            24 GB of JSON. Also available:
+            <a href="assets/pv-2005-may2026.mp4">.mp4</a> ·
+            <a href="assets/pv-2005-may2026.gif">.gif</a>.
+          </figcaption>
+        </figure>
+      </section>
+
+      <section id="energy-mix">
+        <h2>Energy-type mix</h2>
+        <p>
+          National installed capacity per <code>Energietraeger</code>,
+          snapshot 2026-05-01. Numbers reflect this scrape (Wind: full
+          registry; PV: top 200 k by capacity; everything else: full
+          non-PV slice). True PV total is ~98 GW; this chart shows the
+          73 GW captured by the ≥ 49 kW slice.
+        </p>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-energy-mix.svg" aria-label="Energy-type mix"></object>
+          <figcaption>Figure 14 — MaStR energy-type mix, installed capacity at 2026-05-01.</figcaption>
+        </figure>
+      </section>
+
+      <section id="state-ramp">
+        <h2>Build-out per Bundesland</h2>
+        <p>
+          Monthly cumulative wind + PV ≥ 49 kW per state, 2000 → 2025.
+          Bayern (22 GW), Niedersachsen (19 GW) and Brandenburg (18 GW) lead.
+          Sharp inflection around 2010 = PV boom; the post-2020 wedge is
+          mostly utility-scale solar in the former-lignite belt.
+        </p>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-state-ramp.svg" aria-label="Per-Bundesland ramp"></object>
+          <figcaption>Figure 16 — Renewable build-out per Bundesland, 2000 → 2025.</figcaption>
+        </figure>
+      </section>
+
+      <section id="pv-by-type">
+        <h2>PV by installation type</h2>
+        <p>
+          Which sub-type of plant carries the GW? Top 200 k PV plants split by
+          <code>ArtDerSolaranlageId</code>. Free-standing utility parks (16 k
+          plants) hold ~ 43 GW; building-mounted commercial rooftops (184 k
+          plants) hold ~ 30 GW. The residential rooftop and balcony long tail
+          under 49 kW is excluded — that's where the count is, but not the GW.
+        </p>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-pv-by-type.svg" aria-label="PV by installation type"></object>
+          <figcaption>Figure 17 — Cumulative PV by installation type + pie of latest share.</figcaption>
+        </figure>
+      </section>
+
+      <section id="pv-orientation">
+        <h2>PV orientation</h2>
+        <p>
+          Capacity-weighted distribution of panel facing + tilt across the
+          top 200 k PV plants. South-facing dominates at <b>~ 62 %</b> of
+          installed capacity; east-west flat-mount (a utility-park staple)
+          is the strong second at <b>14 %</b>. Trackers stay rare — only
+          <b>0.5 GW</b> of the captured fleet. Most plants tilt 0–19° (flat,
+          utility-park footprints).
+        </p>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-pv-orientation.svg" aria-label="PV orientation"></object>
+          <figcaption>Figure 20 — PV capacity by panel orientation (pie) and tilt angle (bar).</figcaption>
+        </figure>
+      </section>
+
+      <section id="wind-age">
+        <h2>Wind fleet age + repowering signal</h2>
+        <p>
+          Top panel: installed MW per commission year (blue) vs.
+          decommissioned MW per removal year (red, plotted below the
+          axis). The decommission wave kicks in around 2019 as the
+          first big EEG cohort reaches its 20-year payback boundary —
+          ~ 0.6 → 0.75 GW removed each year since 2023.
+        </p>
+        <p>
+          Bottom panel: mean per-turbine rotor MW by commission year.
+          The fleet has upsized from ~ 0.5 MW per turbine in the late
+          90s to ~ 7 MW in 2025 — a <b>15× growth</b> at the unit level,
+          driven by the new offshore 15 MW class.
+        </p>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-wind-age.svg" aria-label="Wind fleet age + upsizing"></object>
+          <figcaption>Figure 21 — German wind: installs vs. decommissions per year, plus turbine-MW upsizing trend.</figcaption>
+        </figure>
+      </section>
+
+      <section id="bess">
+        <h2>Battery storage (BESS)</h2>
+        <p>
+          The German electricity registry tracks storage units under
+          <code>Energieträger=2496</code> (Speicher) — a separate slice from
+          generation. The numbers below cover <b>batteries only</b>
+          (<code>Stromspeichertechnologie = "Batterie"</code>). Pumped-hydro
+          (PSH) is reported in its <a href="#psh">own section</a> below.
+          Scraped the top 200 000 units by <code>Bruttoleistung</code>;
+          that captures everything from grid-scale Li-ion projects down to
+          ~10 kW home batteries.
+        </p>
+        <p>
+          <b>Snapshot 2026-05-01 (batteries only, active):</b>
+          193 599 units · <b>6.49 GW · 9.4 GWh</b>.
+        </p>
+
+        <div class="admonition note">
+          <div class="title">Cross-reference · German + EU sources</div>
+          The three-sector split below uses the same boundaries as
+          <a href="https://battery-charts.de">battery-charts.de</a>
+          (RWTH Aachen · Figgener et al.), the
+          <a href="https://www.bves.de/">BVES (Bundesverband Energiespeichersysteme)</a>
+          market monitor, the
+          <a href="https://ease-storage.eu/">EASE European Storage Market Monitor</a>
+          and the EU SET-Plan flexibility scenarios. Helpful for direct
+          comparison with the figures those reports publish.
+        </div>
+
+        <h3>HSS / CSS / LSS — three-sector view</h3>
+        <p>
+          <b>Heimspeicher (HSS, &lt; 30 kWh)</b> — residential PV+battery,
+          5-15 kWh LFP units typical.
+          <b>Gewerblicher Speicher (CSS, 30 kWh – 1 MWh)</b> — C&amp;I
+          PV+battery, UPS, peak-shaving.
+          <b>Großspeicher (LSS, ≥ 1 MWh)</b> — grid-services + standalone
+          utility BESS + Pumpspeicher.
+        </p>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-bess-sectors.svg" aria-label="BESS sector summary"></object>
+          <figcaption>
+            Figure 22 — Sector split at 2026-05-01 (active only):
+            HSS 176 441 units · 2.47 GW · 2.54 GWh ·
+            CSS 16 659 units · 0.68 GW · 1.20 GWh ·
+            LSS 569 units · 9.81 GW · 933 GWh
+            (LSS energy dominated by Pumpspeicher).
+          </figcaption>
+        </figure>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-bess-sector-growth.svg" aria-label="BESS cumulative growth by sector"></object>
+          <figcaption>Figure 23 — Cumulative BESS power + energy by sector since 2010. HSS is the headcount story; LSS is the GW + GWh story.</figcaption>
+        </figure>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-bess-sector-duration.svg" aria-label="BESS duration per sector"></object>
+          <figcaption>Figure 24 — Duration distribution per sector (Batterie only). HSS clusters at ~1 h (paired to PV self-consumption); CSS at 1.5-2 h; LSS spreads across 1-4 h.</figcaption>
+        </figure>
+        <p>
+          Battery sub-sector breakdown (active, 2026-05-01):
+        </p>
+        <ul>
+          <li><b>HSS</b> &lt; 30 kWh: 176 411 units · 2.47 GW · 2.54 GWh</li>
+          <li><b>CSS</b> 30 kWh – 1 MWh: 16 655 units · 0.68 GW · 1.20 GWh</li>
+          <li><b>LSS</b> ≥ 1 MWh: 526 units · <b>3.34 GW · 5.65 GWh</b></li>
+        </ul>
+        <p>
+          Pipeline: another ~ 8 GW of LSS Li-ion under construction or
+          permitted (LEAG GigaBattery Jänschwalde 1 GW, Boxberg 400 MW,
+          ECO POWER 1–6 = 6 × 300 MW, Westfalen 538 MW…). Combined with
+          PSH the German storage stack reaches ~ 25 GW by ~ 2028.
+        </p>
+
+        <h3>Size-bin breakdown — GW + GWh per per-unit size class</h3>
+        <p>
+          Battery-only view. Residential (10-100 kW) carries ~ 192 k units
+          but only 2.9 GW / 3.5 GWh. The MW-scale grid-services bins
+          (10-100 MW + 1-10 MW) carry most of the GW + GWh.
+        </p>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-bess-by-size.svg" aria-label="BESS per-unit size-bin breakdown"></object>
+          <figcaption>Figure 25 — Battery installed power (left) and usable energy (right) per per-unit size-bin.</figcaption>
+        </figure>
+
+        <h3>BESS power per Kreis</h3>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-bess-power-map.svg" aria-label="BESS power choropleth"></object>
+          <figcaption>Figure 25 — Battery storage power per Kreis, snapshot 2026-05-01.</figcaption>
+        </figure>
+
+        <h3>BESS energy per Kreis</h3>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-bess-energy-map.svg" aria-label="BESS energy choropleth"></object>
+          <figcaption>Figure 26 — Battery storage energy capacity per Kreis (GWh) — batteries only, PSH split off into its own section.</figcaption>
+        </figure>
+
+        <h3>Duration distribution</h3>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-bess-duration.svg" aria-label="BESS duration histogram"></object>
+          <figcaption>Figure 27 — Capacity-weighted duration histogram (Batterie only). Bimodal: 1-h hybrid-PV cluster, 2-4 h grid-services cluster.</figcaption>
+        </figure>
+
+        <h3>Cumulative growth</h3>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-bess-growth.svg" aria-label="BESS cumulative growth"></object>
+          <figcaption>Figure 28 — Cumulative battery power (purple) + energy (blue dashed) since 2010.</figcaption>
+        </figure>
+
+        <h3>21 years of battery + storage growth</h3>
+        <figure>
+          <video autoplay loop muted playsinline preload="metadata"
+                 poster="assets/bess-2005-may2026.gif"
+                 style="max-width:100%;border:1px solid var(--rtd-border);border-radius:4px;background:#fff;">
+            <source src="assets/bess-2005-may2026.mp4" type="video/mp4">
+            <img src="assets/bess-2005-may2026.gif" alt="BESS power per Kreis 2005 to May 2026 animation" style="max-width:100%">
+          </video>
+          <figcaption>
+            Figure 30 — Yearly BESS power per Kreis, 2005 → May 2026.
+            Also available:
+            <a href="assets/bess-2005-may2026.mp4">.mp4</a> ·
+            <a href="assets/bess-2005-may2026.gif">.gif</a>.
+          </figcaption>
+        </figure>
+      </section>
+
+      <section id="psh">
+        <h2>Pumped-hydro storage (PSH)</h2>
+        <p>
+          PSH is reported separately from batteries everywhere serious
+          (battery-charts.de, BVES, EASE, EU SET-Plan) because it's a
+          fundamentally different technology — multi-decade lifecycle,
+          multi-hour duration, mechanical-hydro chemistry instead of
+          electrochemical. Lumping it with Li-ion BESS hides both stories.
+        </p>
+        <p>
+          <b>Snapshot 2026-05-01 (active):</b> 41 sites · <b>6.48 GW ·
+          927.5 GWh</b>. Median site duration ~ 8 h — orders of magnitude
+          longer than the 1-h Li-ion median. Goldisthal alone (4 PSS units
+          × 265 MW each / 9.64 GWh each) accounts for 1.06 GW + 38.5 GWh.
+        </p>
+
+        <h3>PSH energy per Kreis</h3>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-psh-map.svg" aria-label="PSH choropleth"></object>
+          <figcaption>Figure 31 — Pumped-hydro storage energy per Kreis. Thüringen + Bayern + Rheinland-Pfalz lead — these are mountain Kreise with the elevation differential PSH needs.</figcaption>
+        </figure>
+
+        <h3>Distribution + duration</h3>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-psh-summary.svg" aria-label="PSH per-state + duration"></object>
+          <figcaption>Figure 32 — PSH power (left) + energy (right) per Bundesland, plus duration histogram (far right). Median duration ~ 8 h — Li-ion sits at ~ 1 h for comparison.</figcaption>
+        </figure>
+
+        <h3>Top sites</h3>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-psh-top.svg" aria-label="PSH top sites"></object>
+          <figcaption>Figure 33 — Top 15 pumped-hydro sites by power. Annotation: installed energy in GWh + commissioning year.</figcaption>
+        </figure>
+
+        <p style="font-size:0.9rem;color:var(--rtd-muted)">
+          The "other electricity storage" tail (Wasserstoffspeicher 26 units,
+          Druckluft 10, Schwungrad 1) sums to 0.0 GW / 0.006 GWh combined —
+          pilot installations, not yet material.
+        </p>
+      </section>
+
+      <section id="density">
+        <h2>Capacity density (MW/km²)</h2>
+        <p>
+          Absolute capacity makes big Kreise look impressive even when their
+          per-km² intensity is low. Normalising by Kreis area reshuffles the
+          ranking: <b>Dithmarschen</b> and <b>Nordfriesland</b> top wind at
+          1.1–1.6 MW/km²; the city-Kreise of <b>Straubing</b>, <b>Amberg</b>
+          and <b>Memmingen</b> top PV because they host utility parks on
+          small footprints.
+        </p>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-wind-density.svg" aria-label="Wind density choropleth"></object>
+          <figcaption>Figure 18 — Wind capacity density per Kreis (MW per km²), snapshot 2026-05-01.</figcaption>
+        </figure>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-pv-density.svg" aria-label="PV density choropleth"></object>
+          <figcaption>Figure 19 — PV (≥ 49 kW) capacity density per Kreis (MW per km²).</figcaption>
+        </figure>
+      </section>
+
+      <section id="largest-plants">
+        <h2>Largest individual plants</h2>
+        <p>
+          Top 10 by single-unit capacity (<code>Bruttoleistung</code>) in this
+          scrape, snapshot 2026-05-01. Wind list shows the new
+          <b>Nordseecluster</b> + Iberdrola <b>Windanker</b> 15 MW turbines —
+          all offshore, so Kreis is empty. PV list captures every solar park
+          ≥ 100 MW: <b>Schafhöfen</b> (200 MW, Bayern), <b>SILUX 1/2/4</b> +
+          <b>EnBW Gottesgabe</b> + <b>SunInvest</b> all clustered in the
+          former-lignite belt around Leipzig + the Oder-Spree border.
+        </p>
+
+        <h3>Top 10 PV plants</h3>
+        <table>
+          <thead><tr>
+            <th style="text-align:right">MW</th><th>Owner / project</th>
+            <th>Kreis</th><th>Bundesland</th><th style="text-align:right">Installed</th>
+          </tr></thead>
+          <tbody>
+            <tr><td style="text-align:right">200.0</td><td>BEE Solarpark Schafhöfen GmbH &amp; Co. KG</td><td>Regensburg</td><td>Bayern</td><td style="text-align:right">—</td></tr>
+            <tr><td style="text-align:right">162.3</td><td>SILUX Solarpark 1 GmbH &amp; Co. KG</td><td>Leipziger Land</td><td>Sachsen</td><td style="text-align:right">2024</td></tr>
+            <tr><td style="text-align:right">153.1</td><td>EnBW Solarpark Gottesgabe GmbH</td><td>Märkisch-Oderland</td><td>Brandenburg</td><td style="text-align:right">2022</td></tr>
+            <tr><td style="text-align:right">151.0</td><td>EnBW SunInvest GmbH &amp; Co. KG</td><td>Märkisch-Oderland</td><td>Brandenburg</td><td style="text-align:right">2022</td></tr>
+            <tr><td style="text-align:right">144.8</td><td>SILUX Solarpark 4 GmbH &amp; Co. KG</td><td>Leipziger Land</td><td>Sachsen</td><td style="text-align:right">2024</td></tr>
+            <tr><td style="text-align:right">141.6</td><td>ET Solar Gallin-Kuppentin</td><td>Parchim</td><td>Mecklenburg-Vorpommern</td><td style="text-align:right">—</td></tr>
+            <tr><td style="text-align:right">133.3</td><td>LEPV Energiepark Bohrau GmbH &amp; Co. KG</td><td>Spree-Neiße</td><td>Brandenburg</td><td style="text-align:right">—</td></tr>
+            <tr><td style="text-align:right">109.7</td><td>SILUX Solarpark 2 GmbH &amp; Co. KG</td><td>Leipziger Land</td><td>Sachsen</td><td style="text-align:right">2023</td></tr>
+            <tr><td style="text-align:right">102.3</td><td>CEE PVF Klüden GmbH &amp; Co. KG</td><td>Ohrekreis</td><td>Sachsen-Anhalt</td><td style="text-align:right">2025</td></tr>
+            <tr><td style="text-align:right">95.0</td><td>PV Lako Angern GmbH &amp; Co. KG</td><td>Oder-Spree</td><td>Brandenburg</td><td style="text-align:right">—</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Top 10 wind turbines (single-unit capacity)</h3>
+        <table>
+          <thead><tr>
+            <th style="text-align:right">MW</th><th>Owner / project</th>
+            <th>Kreis</th><th>Bundesland</th><th style="text-align:right">Installed</th>
+          </tr></thead>
+          <tbody>
+            <tr><td style="text-align:right">15.0</td><td>Nordseecluster A GmbH &amp; Co. KG</td><td>—</td><td>(offshore)</td><td style="text-align:right">—</td></tr>
+            <tr><td style="text-align:right">15.0</td><td>Nordseecluster A GmbH &amp; Co. KG</td><td>—</td><td>(offshore)</td><td style="text-align:right">—</td></tr>
+            <tr><td style="text-align:right">15.0</td><td>Nordseecluster B GmbH &amp; Co. KG</td><td>—</td><td>(offshore)</td><td style="text-align:right">—</td></tr>
+            <tr><td style="text-align:right">15.0</td><td>Nordseecluster A GmbH &amp; Co. KG</td><td>—</td><td>(offshore)</td><td style="text-align:right">—</td></tr>
+            <tr><td style="text-align:right">15.0</td><td>Nordseecluster B GmbH &amp; Co. KG</td><td>—</td><td>(offshore)</td><td style="text-align:right">—</td></tr>
+            <tr><td style="text-align:right">15.0</td><td>Windanker GmbH</td><td>—</td><td>(offshore)</td><td style="text-align:right">—</td></tr>
+            <tr><td style="text-align:right">15.0</td><td>Nordseecluster B GmbH &amp; Co. KG</td><td>—</td><td>(offshore)</td><td style="text-align:right">—</td></tr>
+            <tr><td style="text-align:right">15.0</td><td>Nordseecluster A GmbH &amp; Co. KG</td><td>—</td><td>(offshore)</td><td style="text-align:right">—</td></tr>
+            <tr><td style="text-align:right">15.0</td><td>Nordseecluster A GmbH &amp; Co. KG</td><td>—</td><td>(offshore)</td><td style="text-align:right">—</td></tr>
+            <tr><td style="text-align:right">15.0</td><td>Nordseecluster A GmbH &amp; Co. KG</td><td>—</td><td>(offshore)</td><td style="text-align:right">—</td></tr>
+          </tbody>
+        </table>
+        <p style="font-size:0.9rem;color:var(--rtd-muted)">
+          Raw data: <a href="assets/largest-plants.json"><code>largest-plants.json</code></a>.
+        </p>
+      </section>
+
+      <section id="yoy-additions">
+        <h2>Capacity added during 2024</h2>
+        <p>
+          New plants registered between 2024-01-01 and 2024-12-31, aggregated
+          per Kreis (Wind + PV ≥ 49 kW from this scrape). Total in this slice:
+          ~13.4 GW — close to the public BNetzA tally of 16 GW once you add
+          back the long tail of sub-49 kW rooftops.
+        </p>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-2024-additions.svg" aria-label="2024 additions choropleth"></object>
+          <figcaption>Figure 15 — Capacity added during 2024, per Kreis. Top: Leipziger Land (565 MW utility solar), Märkisch-Oderland (258 MW), Rendsburg-Eckernförde (244 MW).</figcaption>
+        </figure>
+      </section>
+
+      <section id="operators">
+        <h2>Top operators</h2>
+        <p>
+          Top 30 owners by combined wind + utility-scale PV capacity, snapshot
+          2026-05-01. Names are normalised (legal-form suffixes stripped) but
+          not consolidated across parent companies — most offshore wind farms
+          appear as standalone project vehicles, which is why the top of the
+          chart is dominated by single-farm LLCs rather than utilities.
+        </p>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-top-operators.svg" aria-label="Top 30 operators"></object>
+          <figcaption>Figure 12 — Top 30 operators · Wind (blue) + PV ≥ 200 kW (orange).</figcaption>
+        </figure>
+      </section>
+
+      <section id="offshore">
+        <h2>Offshore wind</h2>
+        <p>
+          Germany's offshore wind fleet at 2026-05-01: 1 732 turbines, 10.4 GW
+          total — 8.6 GW in the Nordsee, 1.8 GW in the Ostsee. The
+          <code>StandortAnonymisiert</code> field carries a sea label
+          ("Nordsee…" / "Ostsee…"), but the actual
+          <code>Laengengrad</code> / <code>Breitengrad</code> coordinates
+          are real (verified across all 1 909 offshore rows). Offshore
+          points still fall outside every Kreis polygon, so they don't
+          contribute to per-Kreis aggregations — we group by operator
+          instead.
+        </p>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-offshore-windparks.svg" aria-label="Top offshore wind operators"></object>
+          <figcaption>Figure 13 — Top 25 offshore wind operators by installed capacity, colored by sea.</figcaption>
+        </figure>
+      </section>
+
+      <section id="kreise-rank">
+        <h2>Top Kreise by installed capacity</h2>
+        <p>
+          Sortable, filterable table of all 434 German Kreise (snapshot
+          2026-05-01), driven by the same MaStR scrape behind the maps above.
+          Click any column to sort; type in the filter box to search by Kreis
+          name or Bundesland. <em>PV</em> column uses the top-50 000 utility-scale
+          plants (≥ 200 kW); <em>Wind #</em> and <em>PV #</em> are turbine /
+          plant counts active at the snapshot date.
+        </p>
+        <div id="kreise-table"></div>
+      </section>
+
+      <section id="downloads">
+        <h2>Bulk downloads</h2>
+        <p>
+          Cleaned, joined-to-Kreis snapshots are regenerated by the weekly
+          CI workflow. <code>parquet</code> is recommended for analysis
+          (zstd-compressed, types preserved); <code>csv.gz</code> for tools
+          without parquet support.
+        </p>
+        <table>
+          <thead>
+            <tr><th>File</th><th>Format</th><th>Rows</th><th>Use</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><a href="data/mastr-snapshot.parquet"><code>mastr-snapshot.parquet</code></a></td>
+              <td>Parquet (zstd)</td>
+              <td>~370 k</td>
+              <td>Per-plant table joined to Kreis + Bundesland. Recommended.</td>
+            </tr>
+            <tr>
+              <td><a href="data/mastr-snapshot.csv.gz"><code>mastr-snapshot.csv.gz</code></a></td>
+              <td>CSV (gzip)</td>
+              <td>~370 k</td>
+              <td>Same data as the parquet, for non-Python consumers.</td>
+            </tr>
+            <tr>
+              <td><a href="data/mastr-by-kreis.csv.gz"><code>mastr-by-kreis.csv.gz</code></a></td>
+              <td>CSV (gzip)</td>
+              <td>~3 k</td>
+              <td>Per-Kreis × energy_type roll-up at the snapshot date.</td>
+            </tr>
+          </tbody>
+        </table>
+        <p style="font-size:0.9rem;color:var(--rtd-muted)">
+          Data © Bundesnetzagentur (MaStR) and OpenStreetMap contributors
+          (Kreis polygons, ODbL-1.0). The compressed snapshot omits owner
+          contact details — names only, no PII.
+        </p>
+      </section>
+
+      <section id="powerplant">
+        <h2>PowerPlant dataclass</h2>
+        <p>Defined in <code>parser.py</code>. Fields after decoding:</p>
+        <table>
+          <thead><tr><th>Field</th><th>Type</th><th>Source</th></tr></thead>
+          <tbody>
+            <tr><td><code>id</code></td><td><code>int</code></td><td><code>Id</code></td></tr>
+            <tr><td><code>num_panels</code></td><td><code>int | None</code></td><td><code>AnzahlSolarModule</code> (dropped if ratio ≤ 0.1)</td></tr>
+            <tr><td><code>power</code></td><td><code>float</code> (kW)</td><td><code>Bruttoleistung</code></td></tr>
+            <tr><td><code>inverter</code></td><td><code>float</code></td><td><code>Nettonennleistung × Leistungsbegrenzung factor</code></td></tr>
+            <tr><td><code>install_date</code></td><td><code>datetime | None</code></td><td><code>InbetriebnahmeDatum</code></td></tr>
+            <tr><td><code>removal_date</code></td><td><code>datetime | None</code></td><td><code>EndgueltigeStilllegungDatum</code></td></tr>
+            <tr><td><code>postal_code</code></td><td><code>str</code></td><td><code>Plz</code></td></tr>
+            <tr><td><code>is_private</code></td><td><code>bool</code></td><td><code>AnlagenbetreiberPersonenArt == 518</code></td></tr>
+            <tr><td><code>facing</code></td><td><code>int | str</code></td><td><code>HauptausrichtungSolarModule</code></td></tr>
+            <tr><td><code>tilt</code></td><td><code>tuple | int | str</code></td><td><code>HauptneigungswinkelSolarmodule</code></td></tr>
+            <tr><td><code>installation_type</code></td><td><code>str | None</code></td><td><code>ArtDerSolaranlageId</code></td></tr>
+            <tr><td><code>building_type</code></td><td><code>str | None</code></td><td><code>NutzungsbereichGebSA</code></td></tr>
+            <tr><td><code>owner_name</code></td><td><code>str</code></td><td><code>AnlagenbetreiberName</code></td></tr>
+            <tr><td><code>energy_type</code></td><td><code>str</code></td><td><code>EnergietraegerName</code></td></tr>
+            <tr><td><code>longitude</code> / <code>latitude</code></td><td><code>float</code></td><td><code>Laengengrad</code> / <code>Breitengrad</code> (EPSG:4326)</td></tr>
+            <tr><td><code>off_shore</code></td><td><code>"Nordsee" | "Ostsee" | None</code></td><td><code>WindAnLandOderSeeId + StandortAnonymisiert</code></td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="gotchas">
+        <h2>Gotchas</h2>
+        <ul>
+          <li>
+            <b>Hamburg's geometry contains a national park as a phantom part.</b>
+            The notebook removes "Nationalpark Hamburgisches Wattenmeer" by
+            part-id 2. Verify the part-id still matches if you regenerate the
+            GeoPackage from a newer OSM extract.
+          </li>
+          <li>
+            <b>Capacity units.</b> <code>Bruttoleistung</code> is in kW; the
+            notebook divides by 1 000 000 to express county totals in GW for the
+            legend.
+          </li>
+          <li>
+            <b>Offshore coordinates are real, despite the label.</b>
+            Records flagged <code>WindAnLandOderSeeId == 889</code> carry a
+            <code>StandortAnonymisiert</code> string ("Nordsee…" / "Ostsee…")
+            <em>and</em> a real <code>Laengengrad</code> /
+            <code>Breitengrad</code>. The original notebook draws them in
+            synthetic sea rectangles anyway — that workaround was based on a
+            wrong assumption about anonymisation; you can drop it if you want
+            point-accurate offshore rendering. Spatial join to Kreis polygons
+            still excludes them (no Kreis covers open sea).
+          </li>
+          <li>
+            <b>Timezone discipline.</b> <code>parse_dotnet_date</code> returns
+            tz-aware UTC datetimes. The notebook strips tz before comparing to
+            date-only filters — keep that conversion local. Do not propagate
+            tz-naive values back into other code.
+          </li>
+        </ul>
+      </section>
+
+      <section id="troubleshooting">
+        <h2>Troubleshooting</h2>
+        <table>
+          <thead><tr><th>Symptom</th><th>Likely cause</th><th>Fix</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Empty DataFrame after <code>load_data</code></td>
+              <td>No <code>data-*.json</code> files in the given directory, or the path is wrong relative to the notebook's CWD</td>
+              <td>Re-run the scrape, or pass an absolute path</td>
+            </tr>
+            <tr>
+              <td>All facings are <code>None</code> after a data refresh</td>
+              <td>MaStR introduced new enum codes</td>
+              <td>Add the new cases in <code>PowerPlant.from_json</code></td>
+            </tr>
+            <tr>
+              <td>Hamburg shows a wedge in the North Sea</td>
+              <td>OSM extract changed and the Wattenmeer is no longer part-id 2</td>
+              <td>Inspect the MultiPolygon parts, update the index</td>
+            </tr>
+            <tr>
+              <td>GIF flickers between frames</td>
+              <td>Bins were re-computed per frame</td>
+              <td>Pass the precomputed <code>BINS</code> list to every call</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <div class="pager">
+        <a href="https://github.com/MaykThewessen/marktstammdatenplotter">← Source on GitHub</a>
+        <a href="#introduction">Back to top ↑</a>
+      </div>
+
+      <div class="footer">
+        <span>Built as a static site · served from <code>/docs</code> on <code>main</code>.</span>
+        <span>Data © MaStR / Bundesnetzagentur · OSM © OpenStreetMap contributors.</span>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="assets/sidebar.js"></script>
+<script src="assets/kreise-table.js"></script>
+</body>
+</html>

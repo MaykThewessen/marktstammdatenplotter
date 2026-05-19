@@ -1,195 +1,357 @@
-# Marktstammdatenregister Plotter — DE Wind
+# Marktstammdatenregister plotter
 
-Choropleth maps and per-region capacity tables for **every wind turbine installed in Germany**, built from the [Marktstammdatenregister (MaStR)](https://www.marktstammdatenregister.de) — Germany's official register of every electricity-generating unit on the grid.
+> Animated choropleth maps of installed wind & solar capacity in Germany,
+> driven by data scraped from the public Marktstammdatenregister (MaStR).
 
-The pipeline merges a curated Zenodo snapshot (~2026-02-19) with the live MaStR JSON API for incremental updates, joins coordinates against NUTS-3 / OSM administrative boundaries, and renders one map per month from 2000 → today. Those frames stitch into the GIF at the top of the repo.
+| Wind | PV (≥ 49 kW) |
+|---|---|
+| ![Wind capacity 2005→May 2026](fig/wind-2005-may2026.gif) | ![PV capacity 2005→May 2026](fig/pv-2005-may2026.gif) |
 
-> **Caution** — This is research-quality code: it needs to run exactly once, much of it is AI-generated and verbose in random places, and almost nothing has been cleaned up. Use it as a recipe, not a library.
+*Installed wind (left) and PV (right, top 200 000 plants ≥ 49 kW) capacity
+per Kreis, 2005 → May 2026. 22 yearly frames plus a final May 2026 YTD
+snapshot from the live registry. Fixed Jenks bins so colors stay comparable
+across years. Available as `.gif` (universal autoplay) and `.mp4`
+(LinkedIn-native, ~30 % smaller, sharper) — see [`fig/`](fig/).*
 
----
+[![Docs](https://img.shields.io/badge/docs-github.io-blue?logo=github)](https://maykthewessen.github.io/marktstammdatenplotter/)
+[![Refresh CI](https://github.com/MaykThewessen/marktstammdatenplotter/actions/workflows/refresh-docs.yml/badge.svg)](https://github.com/MaykThewessen/marktstammdatenplotter/actions/workflows/refresh-docs.yml)
+[![Tests](https://img.shields.io/badge/parser%20tests-52%20passing-brightgreen?logo=pytest)](tests/test_parser.py)
+[![Python](https://img.shields.io/badge/python-3.11+-blue?logo=python&logoColor=white)](https://www.python.org/)
+[![Pixi](https://img.shields.io/badge/managed%20by-pixi-yellow?logo=conda-forge)](https://pixi.sh)
+[![Data](https://img.shields.io/badge/source-MaStR-orange)](https://www.marktstammdatenregister.de/)
+[![Marimo](https://img.shields.io/badge/notebooks-marimo-blueviolet)](https://marimo.io)
 
-## At a glance
-
-| Property | Value |
-| --- | --- |
-| **Country** | Germany 🇩🇪 |
-| **Energy type** | Onshore + offshore wind |
-| **Spatial unit** | 401 NUTS-3 *Kreise* (incl. Berlin/Hamburg/Bremen as city-states) + 2 sea areas (Nordsee, Ostsee) |
-| **Time coverage** | First commissioning ≈ 1980s → today, monthly frames from 2000-01 |
-| **Records** | ≈ 42,000 wind units (Windenergie, MaStR `Energieträger=2497`) |
-| **Latest installed capacity** | **78.55 GW** across 313 regions |
-| **Output formats** | PNG frames, animated GIF, per-region CSV |
-
-### Capacity totals by snapshot
-
-| Snapshot | MW | GW |
-|---:|---:|---:|
-| 2013-12-31 | 28,843.8 | **28.84** |
-| 2024-12-31 | 71,999.6 | **72.00** |
-| 2025-12-31 | 77,818.9 | **77.82** |
-| Latest (today) | 78,553.2 | **78.55** |
-
-### Capacity by Bundesland (latest)
-
-```text
-Niedersachsen           14,125.0 MW  ███████████████████████████████████ 18.0%
-Schleswig-Holstein       9,684.8 MW  ████████████████████████ 12.3%
-Brandenburg              9,561.7 MW  ████████████████████████ 12.2%
-Nordrhein-Westfalen      9,255.7 MW  ███████████████████████ 11.8%
-Nordsee  (offshore)      8,178.9 MW  ████████████████████ 10.4%
-Sachsen-Anhalt           5,777.6 MW  ██████████████  7.4%
-Rheinland-Pfalz          4,318.6 MW  ███████████  5.5%
-Mecklenburg-Vorpommern   3,937.8 MW  ██████████  5.0%
-Hessen                   2,810.3 MW  ███████  3.6%
-Bayern                   2,766.0 MW  ███████  3.5%
-Baden-Württemberg        2,084.1 MW  █████  2.7%
-Thüringen                1,905.2 MW  █████  2.4%
-Ostsee   (offshore)      1,828.2 MW  █████  2.3%
-Sachsen                  1,425.1 MW  ████  1.8%
-Saarland                   564.6 MW  █  0.7%
-Bremen                     191.1 MW  ▏ 0.2%
-Hamburg                    121.7 MW  ▏ 0.2%
-Berlin                      16.6 MW  ▏ 0.0%
-```
-
-> Northern Germany dominates: the four Länder along the North Sea / Baltic coast plus Nordsee offshore make up ≈ 65 % of all installed capacity. Southern Germany (BY/BW) is wind-poor — wind there has historically been blocked by the *10H* setback rule and Alpine topography.
+> [!WARNING]
+> Research-quality code — designed to run once. Most of it is AI-generated and
+> occasionally very verbose. Nothing has been cleaned up. Good luck.
 
 ---
 
-## Pipeline
+## What it does
 
-```mermaid
-flowchart TD
-  subgraph Sources["Data sources (external)"]
-    Z["Zenodo:<br/>goal100_mastr_wind_corrected<br/>(2026-02-19, CSV)"]
-    A["MaStR JSON API<br/>Energieträger=2497"]
-    N["Eurostat GISCO NUTS<br/>(NUTS-1 + NUTS-3 GeoJSON)"]
-    O["OSM germany-latest.o5m<br/>(legacy alternative)"]
-  end
+The MaStR registry contains every grid-connected electricity-generating unit in
+Germany — millions of solar panels, tens of thousands of wind turbines, plus
+hydro, biomass, gas and more. Each record carries an install date, a capacity
+in kW, geographic coordinates, and a pile of enum-encoded metadata.
 
-  subgraph Fetch["Fetch / build"]
-    F1["fetch_mastr.py<br/>--mode incremental"]
-    F2["build_kreise_gpkg.py"]
-    F3["osmfilter + ogr2ogr<br/>(legacy)"]
-  end
+This repo:
 
-  subgraph Process["Process"]
-    P1["parser.py<br/>PowerPlant dataclass<br/>+ MaStR enum decoding"]
-    P2["export_capacity_per_region.py<br/>merge + spatial join + snapshots"]
-    P3["run_notebook.py<br/>per-month plotting"]
-  end
+1. **scrapes** the MaStR public JSON API (`parser.py` decodes the rows),
+2. **joins** turbines to German county polygons extracted from OSM,
+3. **renders** one choropleth PNG per month from the year 2000 to today, and
+4. **assembles** the frames into an animated GIF with `ffmpeg`.
 
-  subgraph Outputs["Outputs"]
-    O1[("DE_wind_installed_capacity<br/>_per_region_*.csv")]
-    O2[("fig/wind-YYYY-MM-DD.png<br/>(≈ 300 frames)")]
-    O3[("wind.gif")]
-  end
+### Pipeline at a glance
 
-  Z --> P2
-  A --> F1 --> P2
-  N --> F2 --> KG["germany_kreise.gpkg"]
-  O --> F3 --> KG
-  KG --> P2
-  KG --> P3
-  Z --> P3
-  A --> P1
-  P2 --> O1
-  P3 --> O2
-  O2 -- "ffmpeg<br/>palette+lanczos" --> O3
-```
+![Data pipeline](fig/flowchart-data-pipeline.svg)
 
-### Stage-by-stage flow
+### Module architecture
 
-```mermaid
-sequenceDiagram
-  participant U as User
-  participant API as MaStR API
-  participant Z as Zenodo CSV
-  participant FS as Local files
-  participant GPKG as germany_kreise.gpkg
-  participant CSV as capacity CSV
-  participant FIG as fig/*.png
+![Architecture](fig/architecture.svg)
 
-  U->>API: fetch_mastr.py --mode incremental --since YYYY-MM-DD
-  API-->>FS: mastr_wind_incremental_<date>.json
-  U->>Z: download goal100 corrected dataset
-  Z-->>FS: goal100_*.csv
+### Frame loop
 
-  U->>GPKG: build_kreise_gpkg.py (NUTS-3 + city-states)
-  U->>CSV: export_capacity_per_region.py
-  CSV->>CSV: merge (zenodo ∪ api new), spatial-join missing landkreis,<br/>infer offshore sea, evaluate snapshot masks
-
-  U->>FIG: run_notebook.py / wind.ipynb<br/>(loop over months, plot choropleth)
-  U->>U: ffmpeg → wind.gif
-```
+![Frame loop](fig/timeline-rendering.svg)
 
 ---
 
-## Repository contents
+## Interactive notebooks
 
-| File | Type | What it does |
-|---|---|---|
-| [`fetch_mastr.py`](fetch_mastr.py) | Fetcher | Hits the MaStR JSON API (`GetErweiterteOeffentlicheEinheitStromerzeugung`). Two modes: **full** (all pages) and **incremental** (sort desc by `InbetriebnahmeDatum`, stop at cutoff). 25k entries / page, 2 s sleep, single energy type per call. |
-| [`parser.py`](parser.py) | Parser | `PowerPlant` dataclass + `from_json()` that decodes MaStR's enum-as-int vocabulary (orientation, tilt, installation type, building usage, offshore sea). Also parses the `/Date(ms)/` .NET-JSON date format. |
-| [`export_wind_csv.py`](export_wind_csv.py) | Exporter | Loads parsed power plants, filters `energy_type == "Wind"`, writes `wind_data.csv`. |
-| [`export_capacity_per_region.py`](export_capacity_per_region.py) | Aggregator | **Core merge**: Zenodo + API → de-duplicate by `mastr_id` → spatial-join missing landkreise → infer offshore sea → evaluate active-on-snapshot mask → group by region → wide-format CSV with one capacity column per snapshot. |
-| [`build_kreise_gpkg.py`](build_kreise_gpkg.py) | GIS builder | Downloads Eurostat GISCO NUTS-3 (≈ Kreise) + NUTS-1 city-states (Berlin, Hamburg, Bremen) and writes `germany_kreise.gpkg`. Replaces the old osmfilter/ogr2ogr pipeline. |
-| [`run_notebook.py`](run_notebook.py) | Plotter (script) | Headless re-implementation of the notebook: load → spatial join → choropleth with Natural Breaks (`mapclassify`, k=8) → save PNG. |
-| [`wind.ipynb`](wind.ipynb) | Plotter (notebook) | Interactive version with the loop over all months. |
-| [`germany_kreise.gpkg`](germany_kreise.gpkg) | Geo | NUTS-3 + city-states, EPSG:4326. |
-| [`DE_wind_installed_capacity_per_region_Zenodo_*.csv`](DE_wind_installed_capacity_per_region_Zenodo_2026-02-19_API_2026-03-04.csv) | Output | 313 regions × {region, bundesland, type, turbines, capacity_MW per snapshot}. |
-| [`fig/`](fig/) | Output | One PNG per (year, month) — ~315 frames. |
+Two [marimo](https://marimo.io) reactive notebooks ship with the repo, plus
+their pre-rendered HTML exports in `docs/`:
 
----
+| Notebook | Source | Static HTML | Controls |
+|---|---|---|---|
+| **PV explorer** | [`pv.py`](pv.py) | [`docs/pv.html`](docs/pv.html) | date · installation type · bin count · colormap |
+| **Wind explorer** | [`wind.py`](wind.py) | [`docs/wind.html`](docs/wind.html) | date · onshore/offshore · bin count · colormap |
 
-## Data sources in detail
-
-<details>
-<summary><b>1. Zenodo "goal100" corrected MaStR wind dataset (primary)</b></summary>
-
-- **DOI**: [10.5281/zenodo.18697247](https://doi.org/10.5281/zenodo.18697247)
-- **Cutoff**: 2026-02-19
-- **Why use it over the raw API?** The Zenodo set has manual corrections (geocoding fixes, removal of duplicate entries, offshore re-labeling) that the raw MaStR has known to mis-record.
-- **Schema (relevant cols)**: `einheit_mastr_nummer`, `datum_inbetriebnahme`, `datum_endgueltige_stilllegung`, `nettonennleistung` (kW), `einheit_betriebsstatus`, `landkreis`, `bundesland`, `lon_x`, `lat_y`, `wind_an_land_oder_auf_see`.
-
-</details>
-
-<details>
-<summary><b>2. MaStR JSON API (incremental top-up)</b></summary>
-
-- **Endpoint**: `https://www.marktstammdatenregister.de/MaStR/Einheit/EinheitJson/GetErweiterteOeffentlicheEinheitStromerzeugung`
-- **Filter**: `Energieträger~eq~'2497'` for wind. (`2495` = solar, `2496` = solar excluded, etc.)
-- **Pagination**: 25 000 / page. Wind ≈ 2 pages; **solar would be ~237 pages** — only fetch solar in incremental mode.
-- **Date format**: .NET-JSON `/Date(milliseconds_utc)/` — see `parse_dotnet_date()` in `parser.py:16` and `fetch_mastr.py:56`.
-- **Why scrape JSON instead of XML?** The official XML export is the canonical bulk source, but the API JSON is pre-filtered, schemaful, and gives ~42k wind rows in two HTTP calls.
-
-```mermaid
-sequenceDiagram
-  participant S as fetch_mastr.py
-  participant A as MaStR API
-  loop incremental, sort desc
-    S->>A: page=N, filter=Energieträger='2497'
-    A-->>S: {Total, Data:[...25000 entries]}
-    S->>S: stop when entry.InbetriebnahmeDatum < --since
-  end
-```
-
-</details>
-
-<details>
-<summary><b>3. Administrative boundaries (NUTS-3 / Kreise)</b></summary>
-
-Two equivalent paths, pick one:
-
-**Modern path (default)** — `build_kreise_gpkg.py`:
 ```bash
-python build_kreise_gpkg.py
-# downloads Eurostat GISCO NUTS_RG_01M_2021_4326_LEVL_3 + LEVL_1
-# writes germany_kreise.gpkg with admin_level=6 Kreise
-# + admin_level=4 city-states (Berlin / Hamburg / Bremen)
+python -m marimo edit pv.py            # reactive editor
+python -m marimo run wind.py           # read-only app
+python -m marimo export html pv.py -o docs/pv.html
 ```
 
-**Legacy path (OSM)** — produces the same file, kept for reproducibility:
+When no `data-*.json` or `germany_kreise.gpkg` are present, both notebooks fall
+back to a synthetic demo dataset so they always render.
+
+### Sample renders (real MaStR data)
+
+Generated from a live scrape (May 2026) of the public Marktstammdatenregister
+API. **Wind** uses the full registry slice (42 495 turbines, every Kreis
+covered). **PV** uses the top 50 000 utility-scale plants sorted by capacity
+(`Bruttoleistung-desc`) — every plant ≥ 200 kW, capturing ≈ 70 GW of
+installed PV (the bulk of Germany's commercial + ground-mount fleet). Rooftop
+balcony solar (the long tail of 6 M plants below 200 kW) is excluded.
+
+| | |
+|---|---|
+| ![PV map — top 50k](fig/sample-pv-map.svg) | ![Wind map](fig/sample-wind-map.svg) |
+| ![PV growth — top 50k](fig/sample-pv-growth.svg) | ![Wind growth](fig/sample-wind-growth.svg) |
+
+> **2026-05-01 snapshot · real data:** 32 107 wind turbines active, 79.7 GW
+> total installed. PV map covers ~195 591 active plants ≥ 49 kW — 72.8 GW
+> combined. Offshore: 1 732 turbines · 10.4 GW (Nordsee + Ostsee).
+
+### Per-unit size-bin distribution
+
+Where the GW + GWh actually sit when you sort by single-unit nameplate
+power. Same bins used for all three technologies — wind almost entirely
+1-10 MW; PV spread across 10 kW – 100 MW; BESS bimodal (residential
+10-100 kW + utility 100-1000 MW).
+
+| Wind | PV |
+|---|---|
+| ![Wind by size](fig/sample-wind-by-size.svg) | ![PV by size](fig/sample-pv-by-size.svg) |
+
+![BESS by size](fig/sample-bess-by-size.svg)
+
+### Installed capacity by Bundesland
+
+![By Bundesland](fig/sample-by-bundesland.svg)
+
+Niedersachsen leads onshore wind (12.7 GW). Bayern leads utility-scale PV
+(12.0 GW). Schleswig-Holstein and Brandenburg both top 8 GW wind. The five
+biggest Bundesländer carry ~70 % of national capacity.
+
+### Who owns Germany's grid?
+
+![Top operators](fig/sample-top-operators.svg)
+
+Top 30 by combined wind + PV. Offshore project vehicles dominate the very top
+(DanTysk Sandbank, EnBW Hohe See, Baltic Eagle, Borkum Riffgrund 2…) because
+every farm is its own LLC. Consolidating by parent would put RWE, Iberdrola
+and Ørsted at the top.
+
+### Offshore wind detail
+
+![Offshore wind farms](fig/sample-offshore-windparks.svg)
+
+1 732 turbines / 10.4 GW offshore — 8.6 GW Nordsee + 1.8 GW Ostsee. MaStR
+anonymises offshore coordinates, so this chart groups by operator instead of
+mapping individual turbines.
+
+### Energy-type mix
+
+![Energy mix](fig/sample-energy-mix.svg)
+
+All registered electricity-generating units in this scrape, by `Energietraeger`.
+Coal (Braunkohle + Steinkohle, 31 GW) is now decisively below utility-scale PV (73 GW).
+Erdgas (36 GW) carries most of the peaking load.
+
+### PV orientation
+
+![PV orientation](fig/sample-pv-orientation.svg)
+
+South-facing dominates at 62 % of installed PV; east-west flat-mount (utility
+parks) is the strong second at 14 %. Trackers stay rare — only 0.5 GW. Most
+plants tilt 0–19° (flat utility footprints).
+
+### Wind fleet age + repowering
+
+![Wind age](fig/sample-wind-age.svg)
+
+Decommission wave from 2019 onwards: first EEG cohort reaching its 20-year
+boundary. Mean per-turbine MW has grown 15× since the late 90s (0.5 → 7 MW),
+driven by the new 15 MW offshore class.
+
+### Battery storage (BESS) — batteries only
+
+![BESS power per Kreis](fig/sample-bess-power-map.svg)
+
+MaStR carries 2.5 M storage records under `Energieträger=2496`. Below
+covers **batteries only** (`Stromspeichertechnologie = "Batterie"`).
+**Pumped-hydro storage gets its [own section](#pumped-hydro-storage-psh)**
+because it's a fundamentally different technology and reported separately
+everywhere serious.
+
+**Snapshot 2026-05-01 (batteries, active):** 193 599 units · **6.49 GW
+/ 9.4 GWh**. Pipeline (+ planned-and-permitted): **+ ~ 8 GW LSS Li-ion**
+by ~ 2028.
+
+#### Three-sector split (battery-charts.de / BVES / EASE convention)
+
+![BESS sectors](fig/sample-bess-sectors.svg)
+
+| Sector | Threshold | Batteries active 2026-05-01 |
+|---|---|---|
+| **HSS** Heimspeicher | < 30 kWh | 176 411 units · 2.47 GW · 2.54 GWh |
+| **CSS** Gewerblich | 30 kWh – 1 MWh | 16 655 units · 0.68 GW · 1.20 GWh |
+| **LSS** Großspeicher | ≥ 1 MWh | 526 units · **3.34 GW · 5.65 GWh** |
+
+Same thresholds as [battery-charts.de](https://battery-charts.de) (RWTH
+Aachen · Figgener et al.), the
+[BVES](https://www.bves.de/) market monitor, the
+[EASE](https://ease-storage.eu/) European Storage Market Monitor, and the
+EU SET-Plan flexibility scenarios. Useful for direct cross-reference.
+
+![BESS sector growth](fig/sample-bess-sector-growth.svg)
+
+HSS is the headcount story (176k households with PV+battery).
+LSS is the GW + GWh story (grid-scale Li-ion at 3.3 GW + 8 GW more in
+the pipeline).
+
+### Pumped-hydro storage (PSH)
+
+![PSH energy per Kreis](fig/sample-psh-map.svg)
+
+41 sites · **6.48 GW · 927.5 GWh** active at 2026-05-01 — roughly 100×
+the energy density of Li-ion batteries because PSH was built for
+multi-hour duration. Median duration ~ 8 h vs ~ 1 h for residential Li-ion.
+
+| Per-state breakdown + duration | Top 15 sites |
+|---|---|
+| ![PSH summary](fig/sample-psh-summary.svg) | ![PSH top sites](fig/sample-psh-top.svg) |
+
+Goldisthal (Thüringen) alone — 4 PSS units × 265 MW × 9.64 GWh — accounts
+for 1.06 GW + 38.5 GWh.
+
+![BESS duration](fig/sample-bess-duration.svg)
+
+![BESS cumulative growth](fig/sample-bess-growth.svg)
+
+### Capacity density (MW per km²)
+
+Absolute capacity makes large rural Kreise look more impressive than they
+are. Normalising by area reshuffles the ranking — small coastal Kreise on
+the wind side, small city-Kreise hosting one or two utility parks on the
+PV side.
+
+| Wind density | PV density |
+|---|---|
+| ![Wind density](fig/sample-wind-density.svg) | ![PV density](fig/sample-pv-density.svg) |
+
+Top per-km² Kreise: **Dithmarschen** 1.6 MW/km² wind, **Straubing Stadt**
+1.5 MW/km² PV.
+
+### Capacity added during 2024
+
+![2024 additions](fig/sample-2024-additions.svg)
+
+Where Germany actually installed new wind + PV (≥ 49 kW) during 2024 — 13.4 GW
+in this scrape. Leipziger Land alone added 565 MW (utility solar in the
+former-lignite belt).
+
+### Build-out per Bundesland
+
+![State ramp](fig/sample-state-ramp.svg)
+
+Cumulative installed capacity per state since 2000. Bayern leads at 22 GW
+(driven by PV), Niedersachsen second at 19 GW (driven by wind), Brandenburg
+third at 18 GW (mixed).
+
+### PV by installation type
+
+![PV by type](fig/sample-pv-by-type.svg)
+
+16 000 free-standing utility parks carry ~ 43 GW. 184 000 building-mounted
+commercial rooftops carry ~ 30 GW. The under-49 kW residential / balcony long
+tail (millions of plants, ~ 30 GW total) is excluded from this scrape.
+
+---
+
+## Quickstart
+
+```bash
+# 1. Install deps (pixi/conda recommended)
+pixi add geopandas pandas numpy matplotlib mapclassify pyogrio shapely
+
+# 2. Scrape registry rows (writes data-1.json ... data-7.json)
+seq 7 | xargs -P 4 -I{} curl --get \
+  'https://www.marktstammdatenregister.de/MaStR/Einheit/EinheitJson/GetErweiterteOeffentlicheEinheitStromerzeugung' \
+  --data-urlencode 'sort=' \
+  --data-urlencode 'page={}' \
+  --data-urlencode 'pageSize=25000' \
+  --data-urlencode 'group=' \
+  --data-urlencode 'filter=Energieträger~neq~\'2495\'~and~Energieträger~neq~\'2496\'' \
+  --data-urlencode 'forExport=true' -o data-{}.json
+
+# 3. Build county polygons (one-time)
+osmfilter germany-latest.o5m \
+  --keep-nodes="boundary=administrative and ( admin_level=6 or admin_level=4 )" \
+  --keep-ways="boundary=administrative and ( admin_level=6 or admin_level=4 )" \
+  --keep-relations="boundary=administrative and ( admin_level=6 or admin_level=4 )" \
+  --drop-version --drop-author \
+  -o=germany_admin_levels_4_6.osm
+ogr2ogr -f GPKG germany_kreise.gpkg germany_admin_levels_4_6.osm \
+  -sql "SELECT name, admin_level, boundary FROM multipolygons \
+        WHERE boundary = 'administrative' \
+        AND (admin_level = '6' \
+             OR (admin_level = '4' AND name IN ('Berlin','Hamburg','Bremen')))" \
+  -nlt MULTIPOLYGON -overwrite -nln multipolygons
+
+# 4. Render frames
+jupyter nbconvert --to notebook --execute wind.ipynb --output wind.executed.ipynb
+
+# 5. Assemble GIF — see "Animation" section below
+```
+
+---
+
+## Getting Marktstammdatenregister data
+
+Yes, the registry offers a full XML export. But the API filters server-side and
+returns JSON instead of XML, so this repo scrapes that instead:
+
+```bash
+seq 7 | xargs -P 4 -I{} curl --get \
+  'https://www.marktstammdatenregister.de/MaStR/Einheit/EinheitJson/GetErweiterteOeffentlicheEinheitStromerzeugung' \
+  --data-urlencode 'sort=' \
+  --data-urlencode 'page={}' \
+  --data-urlencode 'pageSize=25000' \
+  --data-urlencode 'group=' \
+  --data-urlencode 'filter=Energieträger~neq~\'2495\'~and~Energieträger~neq~\'2496\'' \
+  --data-urlencode 'forExport=true' -o data-{}.json
+```
+
+The `filter` excludes two Energieträger codes (2495, 2496) — both PV — so the
+default scrape covers wind, biomass, hydro, gas, etc. ~169 k rows. Rate-limit
+yourself; the API gets slow under heavy load.
+
+### Scraping PV separately
+
+The PV slice of the registry holds **6.1 M plants** (rooftop, balcony, ground).
+The API returns 25 000 rows per page, so a full pull is ~245 pages and ≈24 GB
+of JSON — usually not what you want. Two practical scopes:
+
+```bash
+# "Top-N by capacity" — 50 k largest plants (~200 MB).
+# Sort = Bruttoleistung-desc puts the 200 MW utility parks first; page 2
+# bottoms out around 200 kW. Captures ~70 GW = bulk of Germany's PV fleet,
+# without the 6 M rooftop/balcony long tail.
+mkdir -p data-pv
+seq 2 | xargs -P 2 -I{} curl --get \
+  'https://www.marktstammdatenregister.de/MaStR/Einheit/EinheitJson/GetErweiterteOeffentlicheEinheitStromerzeugung' \
+  --data-urlencode 'sort=Bruttoleistung-desc' \
+  --data-urlencode 'page={}' \
+  --data-urlencode 'pageSize=25000' \
+  --data-urlencode 'group=' \
+  --data-urlencode "filter=Energieträger~eq~'2495'" \
+  --data-urlencode 'forExport=true' \
+  -o data-pv/data-{}.json
+```
+
+> **Filter quirk** — MaStR silently drops the second clause when ANDed with a
+> different field, e.g. `Energieträger~eq~'2495'~and~ArtDerSolaranlageId~eq~'852'`
+> returns the same row count as `Energieträger~eq~'2495'` alone. Filter
+> client-side after loading if you need a narrower slice.
+
+### Decoding the rows
+
+MaStR fields are numeric enum codes (e.g. `698` for "Süd-Ost", `853` for
+"building"). `parser.py` decodes the six enums that matter for plotting:
+
+![Enum decoding](fig/enum-decoding.svg)
+
+Unknown codes become `None`. The registry adds codes over time, so check
+`parser.PowerPlant.from_json` after large data refreshes.
+
+---
+
+## Getting map data
+
+County boundaries come from a Germany OSM extract (e.g.
+[geofabrik.de](https://download.geofabrik.de/europe/germany.html)):
+
 ```bash
 osmfilter germany-latest.o5m \
   --keep-nodes="boundary=administrative and ( admin_level=6 or admin_level=4 )" \
@@ -200,100 +362,27 @@ osmfilter germany-latest.o5m \
 
 ogr2ogr -f GPKG germany_kreise.gpkg germany_admin_levels_4_6.osm \
   -sql "SELECT name, admin_level, boundary FROM multipolygons \
-        WHERE boundary='administrative' AND \
-              (admin_level='6' OR \
-               (admin_level='4' AND name IN ('Berlin','Hamburg','Bremen')))" \
+        WHERE boundary = 'administrative' \
+        AND (admin_level = '6' \
+             OR (admin_level = '4' AND name IN ('Berlin','Hamburg','Bremen')))" \
   -nlt MULTIPOLYGON -overwrite -nln multipolygons
 ```
 
-</details>
+`admin_level=6` is `Kreis` / `Landkreis`. The three city-states (Berlin,
+Hamburg, Bremen) are `admin_level=4`, so they get pulled in by name.
+
+> **Gotcha** — Hamburg's MultiPolygon contains "Nationalpark Hamburgisches
+> Wattenmeer" as part-id 2. The notebook strips it explicitly. If you regenerate
+> the GPKG from a newer OSM extract, double-check the part-id has not shifted.
 
 ---
 
-## Key data structures
+## Turning results into GIFs
 
-### `PowerPlant` (after enum decoding) — see [`parser.py`](parser.py)
-
-| Field | Type | Notes |
-|---|---|---|
-| `id` | `int` | MaStR `Id` |
-| `power` | `float` | `Bruttoleistung` (kW) — gross |
-| `inverter` | `float` | Net derated by `Leistungsbegrenzung` (50/60/70 % caps for some PV; passthrough for wind) |
-| `install_date` | `datetime\|None` | UTC, parsed from `/Date(ms)/` |
-| `removal_date` | `datetime\|None` | Final decommissioning |
-| `postal_code` | `str` | `Plz` |
-| `is_private` | `bool` | `AnlagenbetreiberPersonenArt == 518` |
-| `facing` | `int\|str\|None` | Compass deg, or `"tracked"` / `"east-west"` |
-| `tilt` | `tuple[int,int]\|str\|None` | Range in deg, or `"tracked"` / 90 (façade) |
-| `installation_type` | `str\|None` | `building` / `building_other` / `free` / `water` / `parking_lot` / `balkonkraftwerk` |
-| `building_type` | `str\|None` | `commercial` / `household` / `industry` / `farming` / `public` / `other` |
-| `energy_type` | `str` | `EnergietraegerName` (e.g. "Wind") |
-| `longitude`, `latitude` | `float` | EPSG:4326 |
-| `off_shore` | `str\|None` | `"Nordsee"` / `"Ostsee"` / None |
-
-### Per-region capacity CSV — output of [`export_capacity_per_region.py`](export_capacity_per_region.py)
-
-| Column | Type | Description |
-|---|---|---|
-| `region` | str | NUTS-3 *Kreis* name **or** `Nordsee` / `Ostsee` for offshore |
-| `bundesland` | str | German federal state, or sea name for offshore (self-referential by design) |
-| `type` | enum | `land` \| `offshore` |
-| `turbines` | int | Active turbine count *as of latest snapshot* |
-| `capacity_MW_2013` | float | Σ installed MW active on 2013-12-31 |
-| `capacity_MW_2024` | float | Σ installed MW active on 2024-12-31 |
-| `capacity_MW_2025` | float | Σ installed MW active on 2025-12-31 |
-| `capacity_MW_latest` | float | Σ installed MW active *today* (no removal-date threshold) |
-
-**Active-on-snapshot rule** (see `is_active_on()` in `export_capacity_per_region.py:206`):
-```
-active = (install_date ≤ snapshot)
-       ∧ (removal_date is NaT  OR  removal_date > snapshot)
-       ∧ (status ∉ {"Endgültig stillgelegt","Vorübergehend stillgelegt"})
-```
-
----
-
-## Top 10 regions, latest snapshot
-
-| Rank | Region | Bundesland | Type | Turbines | MW |
-|---:|---|---|---|---:|---:|
-| 1 | Nordfriesland | Schleswig-Holstein | land | 861 | 2,566.1 |
-| 2 | Dithmarschen | Schleswig-Holstein | land | 835 | 2,361.7 |
-| 3 | Uckermark | Brandenburg | land | 682 | 1,757.9 |
-| 4 | Schleswig-Flensburg | Schleswig-Holstein | land | 504 | 1,470.6 |
-| … | (see CSV) | | | | |
-
----
-
-## Usage
-
-### Install
-
-Uses GeoPandas, pandas, mapclassify, matplotlib, requests. With pixi:
-
-```bash
-pixi add geopandas pandas mapclassify matplotlib requests pyogrio shapely
-```
-
-### One-shot reproduce everything
-
-```bash
-# 1. Build admin boundaries
-python build_kreise_gpkg.py
-
-# 2. Top up MaStR with anything new since the Zenodo cutoff
-python fetch_mastr.py --energy wind --mode incremental --since 2026-02-19
-
-# 3. Build the per-region capacity CSV (Zenodo + API)
-python export_capacity_per_region.py
-
-# 4. Plot one frame (or run wind.ipynb for the monthly loop)
-python run_notebook.py
-```
-
-### Animate frames into a GIF
-
-The notebook saves `fig/wind-YYYY-MM-DD.png`. Stitching them needs renaming to `frame%03d.png` because ffmpeg can't glob arbitrary patterns reliably:
+It is surprisingly hard to turn a folder of PNGs with names like `wind-2007-04.png`
+into a video with `ffmpeg`, which insists on `frame%03d.png`. The block below
+renames everything to a tmpdir first, then runs `palettegen` + `paletteuse` for
+a clean palette:
 
 ```fish
 set -l file wind
@@ -320,49 +409,61 @@ and ffmpeg -framerate 30 -i "$temp_dir/frame%03d.png" \
 and rm -rf "$temp_dir"
 ```
 
-> **Why so convoluted?** PNG has no built-in timestamp metadata, so ffmpeg can't infer ordering — it needs a strictly numbered filename pattern. The 120-frame end-pad makes the GIF "rest" on the final state. With JPEG + EXIF this would be a one-liner.
+The final-frame repetition keeps the last month on screen for ~4 seconds before
+the GIF loops. Drop `-loop 0` if you want a one-shot.
+
+> **Fun fact**: This whole renaming dance exists because PNGs have no timestamp
+> metadata. JPGs with EXIF would just work with `ffmpeg`'s glob pattern.
 
 ---
 
-## How merge & dedup actually work
+## Layout
 
-```mermaid
-flowchart LR
-  Z["Zenodo CSV<br/>~42 000 rows"] -->|mastr_id| M{Merge}
-  A["MaStR API JSON<br/>incremental"] -->|mastr_id ∉ Zenodo| M
-  M --> SJ{landkreis missing?}
-  SJ -- yes & has lon/lat --> S["spatial join<br/>against Kreise polygons"]
-  SJ -- no --> K
-  S --> K["fill bundesland<br/>via landkreis→BL lookup"]
-  K --> O{offshore?}
-  O -- yes --> SEA["sea_area =<br/>Nordsee \| Ostsee<br/>(by name or bbox)"]
-  O -- no --> R[region = landkreis]
-  SEA --> R2[region = sea_area]
-  R --> AGG["group by (region, bundesland, type)<br/>× evaluate snapshot mask × Σ capacity_MW"]
-  R2 --> AGG
-  AGG --> CSV[(capacity CSV)]
-```
-
-### Edge cases handled
-- **Missing `bundesland` on API entries** → looked up from `landkreis` (Zenodo provides the lookup).
-- **Missing `landkreis` on API entries** with valid lon/lat → spatial join against `germany_kreise.gpkg`.
-- **Offshore turbines** with `bundesland = "Niedersachsen, Küstenmeer"` → re-labeled `Nordsee`.
-- **Offshore turbines** with no `bundesland` at all → bbox check on lon/lat to pick `Nordsee` vs. `Ostsee`.
-- **Decommissioned turbines** → excluded from a snapshot if `status ∈ {Endgültig stillgelegt, Vorübergehend stillgelegt}` or `removal_date ≤ snapshot`.
+| File / dir | Purpose |
+|------------|---------|
+| `parser.py` | `PowerPlant` dataclass + JSON-to-record decoder |
+| `mastr_plot.py` | Shared helpers (load, aggregate, choropleth) + synthetic demo data |
+| `pixi.toml` | Reproducible env: `pixi install` then `pixi run pv-edit` / `wind-edit` / `docs-build` |
+| `pv.py` | Marimo notebook — interactive PV explorer |
+| `wind.py` | Marimo notebook — interactive wind explorer |
+| `wind.ipynb` | Original Jupyter notebook: load → join → plot → save frames |
+| `fig/` | Rendered PNG/GIF outputs (gitignored), plus pipeline + sample SVGs |
+| `docs/` | Read-the-Docs–style site published at [maykthewessen.github.io/marktstammdatenplotter](https://maykthewessen.github.io/marktstammdatenplotter/) |
+| `CLAUDE.md` | Conventions for Claude Code agents |
+| `CITATION.cff` | Citation metadata for the software + upstream datasets |
+| `tests/` | `pytest` suite covering `parser.py` enum decoders (52 tests) |
+| `scripts/` | CI helpers: `render_samples.py`, `render_wind_gif.py`, `build_kreise_json.py`, `build_downloads.py` |
+| `docs/data/` | Bulk downloads — `mastr-snapshot.parquet` + CSV.gz mirrors |
+| `CHANGELOG.md` | Notable changes per version (Keep-a-Changelog format) |
+| `CONTRIBUTING.md` | How to add a chart / parser enum, style + commit rules |
 
 ---
 
-## Caveats
+## What this method does **not** track
 
-- **Research-quality code**: scripts are imperative top-level, no tests, paths hard-coded relative to repo root.
-- **API rate-limiting**: 2-second sleep between pages; full-mode for solar is ~237 pages and will get throttled.
-- **Coordinate precision**: MaStR redacts coords for small private installations (`StandortAnonymisiert`) — those rows are dropped from the spatial join.
-- **Removal dates are sparse**: many old turbines lack a `datum_endgueltige_stilllegung`; we treat NaT as "still active". This slightly inflates older snapshots.
-- **City-states**: Berlin/Hamburg/Bremen are NUTS-1, not NUTS-3 — handled as `admin_level=4` so they appear as a single polygon, not subdivided.
+The choropleths and animations capture the bulk of utility + commercial
+capacity, but a few categories are systematically excluded — list them
+explicitly so nobody draws the wrong conclusion:
 
-## License & attribution
+| Excluded | Why | Approx scale |
+|---|---|---|
+| PV plants < 49 kW (residential rooftop, balcony) | Top-200 k-by-capacity scrape cap | ~ 25 GW |
+| Records with NaT `install_date` | Snapshot filter is `install_date ≤ snap` | ~ 15 k rows / 71 GW (mostly legacy conventional) |
+| Records with NaN `Laengengrad` / `Breitengrad` | Spatial join drops them | ~ 76 k rows / 0.8 GW |
+| Offshore turbines in choropleths | No Kreis covers open sea | 1 732 turbines / 10.4 GW *(reported separately)* |
+| Battery storage (Speicher) | `Energieträger` codes 2495 + 2496 filtered out | several GW BESS |
+| Heat-only plants (Wärme) | Outside Wind+PV scope | ~ 2 GW thermal |
+| Plants approved but not commissioned | No `InbetriebnahmeDatum` yet | several GW pipeline |
+| Behind-the-meter / unregistered Balkonkraftwerke | Registration was optional pre-2017 | ~ 0.5 GW |
+| Plants decommissioned before snapshot | Removed by `removal_date > snap` filter | 3 GW cumulative since 2013 |
 
-- Code: see repo header.
-- MaStR data: © Bundesnetzagentur — open data, CC BY 4.0.
-- Zenodo "goal100" curated dataset: cite [10.5281/zenodo.18697247](https://doi.org/10.5281/zenodo.18697247).
-- NUTS boundaries: © EuroGeographics / Eurostat GISCO.
+Offshore lat/lon: contrary to the original notebook's assumption, MaStR
+*does* carry real coordinates for offshore plants. The `StandortAnonymisiert`
+field is only a sea label ("Nordsee…" / "Ostsee…"). Drop the synthetic-sea
+workaround if you want point-accurate offshore positions.
+
+## Credits
+
+Forked from [emmericp/marktstammdatenplotter](https://github.com/emmericp/marktstammdatenplotter).
+Data © Marktstammdatenregister, Bundesnetzagentur. OSM © OpenStreetMap
+contributors.
