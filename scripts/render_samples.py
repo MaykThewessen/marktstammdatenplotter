@@ -58,7 +58,7 @@ def _save_choropleth_pair(gdf, col, cmap, bins, title, legend_label, out_name,
     plt.close(fig)
 
 
-def render_map(records, units, energy_type, title_prefix, cmap, out_name):
+def render_map(records, units, energy_type, title_prefix, cmap, out_name, unit="GW"):
     agg, active = mastr_plot.aggregate_by_unit(records, units, SNAP.date(), energy_type)
     positive = agg["power_gw"][agg["power_gw"] > 0].to_numpy()
     bins = mastr_plot.jenks_bins(positive, k=7)
@@ -66,12 +66,12 @@ def render_map(records, units, energy_type, title_prefix, cmap, out_name):
     shown_gw = agg["power_gw"].sum()
     title = (
         f"{title_prefix} — {SNAP.date()}\n"
-        f"{len(active):,} plants · {round(total_gw, 1)} GW"
+        f"{len(active):,} plants · {round(total_gw, 1)} {unit}"
     )
     if total_gw - shown_gw > 1.0:
-        title += f"\n({round(shown_gw, 1)} GW shown on map · " \
-                 f"{round(total_gw - shown_gw, 1)} GW offshore / out-of-Kreis)"
-    _save_choropleth_pair(agg, "power_gw", cmap, bins, title, "Capacity [GW]", out_name)
+        title += f"\n({round(shown_gw, 1)} {unit} shown on map · " \
+                 f"{round(total_gw - shown_gw, 1)} {unit} offshore / out-of-Kreis)"
+    _save_choropleth_pair(agg, "power_gw", cmap, bins, title, f"Capacity [{unit}]", out_name)
 
 
 def _load_planned_gw_monthly(energy_type: str, snap: pd.Timestamp) -> pd.Series | None:
@@ -135,7 +135,7 @@ def _load_planned_gw_monthly(energy_type: str, snap: pd.Timestamp) -> pd.Series 
 
 
 def render_growth(records, energy_type, label, color_fill, color_line, out_name,
-                  xlim_start="2000-01-01", xlim_end=None):
+                  xlim_start="2000-01-01", xlim_end=None, unit="GW"):
     sub = records[records["energy_type"] == energy_type].copy()
     monthly = (
         sub.assign(month=sub["install_date"].dt.to_period("M"))
@@ -161,7 +161,7 @@ def render_growth(records, energy_type, label, color_fill, color_line, out_name,
         left=pd.Timestamp(xlim_start),
         right=pd.Timestamp(xlim_end) if xlim_end else None,
     )
-    ax.set_ylabel(f"Cumulative {label} [GW]")
+    ax.set_ylabel(f"Cumulative {label} [{unit}]")
     ax.set_title(f"Cumulative {label} capacity over time")
     ax.legend(loc="upper left", fontsize=9)
     ax.grid(alpha=0.3)
@@ -363,7 +363,8 @@ def render_yoy_additions(records, units, out_name, year: int = 2024):
                           f"New capacity {year} [MW]", out_name)
 
 
-def render_density_map(records, units, energy_type, cmap, out_name, title_prefix):
+def render_density_map(records, units, energy_type, cmap, out_name, title_prefix,
+                       unit="GW"):
     import matplotlib.colors as mcolors
 
     units = units.copy()
@@ -377,7 +378,7 @@ def render_density_map(records, units, energy_type, cmap, out_name, title_prefix
         bins = [0.0, max(1.0, float(positive.max() or 1.0))]
     title = (
         f"{title_prefix} per km² — {SNAP.date()}\n"
-        f"{len(active):,} active · {round(active['power'].sum() / 1e6, 1)} GW total"
+        f"{len(active):,} active · {round(active['power'].sum() / 1e6, 1)} {unit} total"
     )
     _save_choropleth_pair(agg, "mw_per_km2", cmap, bins, title,
                           "Capacity density [MW/km²]", out_name)
@@ -467,7 +468,7 @@ def render_pv_orientation(records, out_name):
     )
     axs[0].set_title(
         f"PV capacity by panel orientation\n"
-        f"({fac_known.sum():.1f} GW with known facing)"
+        f"({fac_known.sum():.1f} GWp with known facing)"
     )
 
     til_known = til.drop("unknown", errors="ignore")
@@ -475,7 +476,7 @@ def render_pv_orientation(records, out_name):
                 color="#0ea5e9", edgecolor="#1e293b", linewidth=0.4)
     axs[1].set_yticks(range(len(til_known)))
     axs[1].set_yticklabels(til_known.index)
-    axs[1].set_xlabel("Installed capacity [GW]")
+    axs[1].set_xlabel("Installed capacity [GWp]")
     axs[1].set_title("PV capacity by tilt angle")
     axs[1].grid(axis="x", alpha=0.3)
     fig.suptitle("Solar PV orientation analysis", fontsize=13)
@@ -606,7 +607,7 @@ def render_pv_orientation_polar(out_name):
         gw = total_per_dir[j]
         ax.text(
             np.deg2rad(deg), 2024.5,
-            f"{gw:.0f} GW" if gw >= 10 else f"{gw:.1f}",
+            f"{gw:.0f} GWp" if gw >= 10 else f"{gw:.1f}",
             ha="center", va="center", fontsize=6.5, color="white", alpha=0.85,
         )
 
@@ -617,7 +618,7 @@ def render_pv_orientation_polar(out_name):
         ScalarMappable(norm=norm, cmap=cmap),
         ax=ax, pad=0.08, fraction=0.025, aspect=35, shrink=0.7,
     )
-    cbar.set_label("GW commissioned per year", fontsize=9, color="white", labelpad=8)
+    cbar.set_label("GWp commissioned per year", fontsize=9, color="white", labelpad=8)
     cbar.ax.tick_params(labelsize=8, colors="white")
     plt.setp(cbar.ax.yaxis.get_ticklines(), color="white")
 
@@ -625,7 +626,7 @@ def render_pv_orientation_polar(out_name):
     peak_yr = years[int(np.argmax(matrix.sum(axis=1)))]
     ax.set_title(
         f"German PV — capacity by orientation & commissioning year\n"
-        f"MaStR · {total_gw_all:.0f} GW total · peak year: {peak_yr}",
+        f"MaStR · {total_gw_all:.0f} GWp total · peak year: {peak_yr}",
         fontsize=12, pad=24, color="white",
     )
 
@@ -727,7 +728,7 @@ def render_pv_orientation_polar_snapshot(out_name):
     for r in r_ticks:
         ring = np.linspace(0, 2 * np.pi, 500)
         ax.plot(ring, [r] * 500, color="white", lw=0.3, alpha=0.25, linestyle="--")
-        ax.text(np.deg2rad(15), r, f"{r} GW",
+        ax.text(np.deg2rad(15), r, f"{r} GWp",
                 fontsize=6.5, color="white", alpha=0.6, va="bottom")
 
     # Compass labels + GW values at each direction
@@ -749,7 +750,7 @@ def render_pv_orientation_polar_snapshot(out_name):
         )
         ax.text(
             np.deg2rad(deg), gw_max * 1.05,
-            f"{gw:.1f} GW",
+            f"{gw:.1f} GWp",
             ha="center", va="center",
             fontsize=7.5, color=cmap(norm(gw)), fontweight="bold",
         )
@@ -766,14 +767,14 @@ def render_pv_orientation_polar_snapshot(out_name):
         ScalarMappable(norm=norm, cmap=cmap),
         ax=ax, pad=0.09, fraction=0.025, aspect=35, shrink=0.65,
     )
-    cbar.set_label("Installed capacity [GW]", fontsize=9, color="white", labelpad=8)
+    cbar.set_label("Installed capacity [GWp]", fontsize=9, color="white", labelpad=8)
     cbar.ax.tick_params(labelsize=8, colors="white")
     plt.setp(cbar.ax.yaxis.get_ticklines(), color="white")
 
     ax.set_title(
         f"German PV — orientation of installed capacity · {SNAP.date()}\n"
-        f"Active units · MaStR · {total_gw:.0f} GW total"
-        f" · trackers {tracker_gw:.2f} GW (excluded from rose)",
+        f"Active units · MaStR · {total_gw:.0f} GWp total"
+        f" · trackers {tracker_gw:.2f} GWp (excluded from rose)",
         fontsize=11, pad=22, color="white",
     )
 
@@ -921,7 +922,7 @@ def render_bess_by_size(bess_df, out_name: str):
 
 def render_generation_by_size(records, energy_type: str, palette: list[str],
                               tech_label: str, noun: str, out_name: str,
-                              aggregate_by: str | None = None):
+                              aggregate_by: str | None = None, unit: str = "GW"):
     """Single-panel GW per power-bin for Wind / PV.
 
     `aggregate_by=None`: per-unit (per-turbine, per-plant) — default.
@@ -959,13 +960,13 @@ def render_generation_by_size(records, energy_type: str, palette: list[str],
         total_gw = float(agg["power_kw"].sum()) / 1e6 if len(agg) else 0.0
         scope_label = (
             f"{project_count:,} projects (aggregated from {unit_count:,} "
-            f"{noun} sharing an owner) · {total_gw:.1f} GW total"
+            f"{noun} sharing an owner) · {total_gw:.1f} {unit} total"
         )
         binned_input = agg
     else:
         scope_label = (
             f"{len(active):,} active {noun} · "
-            f"{active['power_kw'].sum() / 1e6:.1f} GW total"
+            f"{active['power_kw'].sum() / 1e6:.1f} {unit} total"
         )
         binned_input = active
 
@@ -974,7 +975,7 @@ def render_generation_by_size(records, energy_type: str, palette: list[str],
     fig, ax = plt.subplots(figsize=(11, 4.5), dpi=120)
     bin_basis = "per-project" if aggregate_by else "per-unit"
     _bar_with_labels(
-        ax, gw, palette, "Installed power [GW]",
+        ax, gw, palette, f"Installed power [{unit}]",
         f"{tech_label} installed power by {bin_basis} size-bin — {snap.date()}\n"
         f"({scope_label})",
         fmt="{:.2f}",
@@ -1407,7 +1408,7 @@ def render_pv_by_type(records, out_name):
     ax = axs[0]
     ax.stackplot(piv.index, piv.values.T, labels=piv.columns,
                  colors=palette, alpha=0.95, linewidth=0)
-    ax.set_ylabel("Cumulative PV [GW]")
+    ax.set_ylabel("Cumulative PV [GWp]")
     ax.set_title(f"PV build-out by installation type, 2000 → {SNAP.year}")
     ax.legend(loc="upper left", fontsize=9, framealpha=0.92)
     ax.grid(alpha=0.3)
@@ -1418,7 +1419,7 @@ def render_pv_by_type(records, out_name):
             autopct="%1.0f%%", startangle=90,
             textprops={"fontsize": 9},
             wedgeprops={"edgecolor": "white", "linewidth": 1})
-    ax2.set_title(f"Share at {piv.index[-1].date()}\n({latest.sum():.1f} GW total)")
+    ax2.set_title(f"Share at {piv.index[-1].date()}\n({latest.sum():.1f} GWp total)")
 
     fig.tight_layout()
     for d in (FIG, DOCS):
@@ -1479,6 +1480,7 @@ def main():
         title_prefix="PV",
         cmap="YlOrRd",
         out_name="sample-pv-map.svg",
+        unit="GWp",
     )
     render_map(
         records, units, "Wind",
@@ -1493,6 +1495,7 @@ def main():
         out_name="sample-pv-growth.svg",
         xlim_start="2005-01-01",
         xlim_end="2030-12-31",
+        unit="GWp",
     )
     render_growth(
         records, "Wind",
@@ -1511,7 +1514,7 @@ def main():
     render_density_map(records, units, "Wind", "GnBu",
                        "sample-wind-density.svg", "Wind capacity density")
     render_density_map(records, units, "Solare Strahlungsenergie", "YlOrRd",
-                       "sample-pv-density.svg", "PV capacity density")
+                       "sample-pv-density.svg", "PV capacity density", unit="GWp")
     export_largest_plants(records, units, "largest-plants.json")
     render_pv_orientation(records, "sample-pv-orientation.svg")
     render_pv_orientation_polar("sample-pv-orientation-polar.svg")
@@ -1534,6 +1537,7 @@ def main():
                  "#ea580c", "#9a3412", "#7c2d12"],
         tech_label="PV", noun="plants",
         out_name="sample-pv-by-size.svg",
+        unit="GWp",
     )
 
     # BESS slice lives in its own data-bess/ dir; render only if present.

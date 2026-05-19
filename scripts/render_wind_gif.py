@@ -46,6 +46,8 @@ PRESETS = {
         "noun": "plants",
         "title": "Installed PV capacity in Germany",
         "extra_subtitle": "",
+        "agg_unit": "GWp",
+        "legend_label": "Capacity [GWp]",
     },
     "bess": {
         "kind": "bess",
