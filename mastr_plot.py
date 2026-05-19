@@ -427,11 +427,68 @@ def normalise_kreis_name(s):
     return s
 
 
+def _resolve_bulk_source(
+    source: str, bulk_dir: Path | None,
+) -> tuple[str, Path | None]:
+    """Decide between open-mastr SQLite and the Zenodo parquet directory.
+
+    Returns (resolved_source, bulk_path_or_None). resolved_source is one of
+    "sqlite" or "zenodo". For "auto", the SQLite path wins when the DB exists
+    AND has rows; otherwise we fall back to the parquet directory.
+    """
+    if source not in ("zenodo", "sqlite", "auto"):
+        raise ValueError(f"unknown source {source!r}; expected zenodo|sqlite|auto")
+
+    if source == "sqlite":
+        # Force: import + return without touching the parquet path.
+        import mastr_db
+        if not mastr_db.DB_PATH.exists():
+            raise FileNotFoundError(
+                f"source='sqlite' requested but {mastr_db.DB_PATH} does not exist. "
+                "Run `pixi run db-mastr-core` first."
+            )
+        return "sqlite", None
+
+    if source == "zenodo":
+        chosen = Path(bulk_dir) if bulk_dir else find_bulk_dir()
+        if chosen is None:
+            raise FileNotFoundError(
+                "No open-MaStR bulk dump found. Expected solar.parquet / wind.parquet"
+                " / storage.parquet under BNetzA_MaStR/."
+            )
+        return "zenodo", chosen
+
+    # auto: prefer SQLite when present + populated; otherwise fall back.
+    import mastr_db
+    if mastr_db.DB_PATH.exists():
+        try:
+            # Cheap row probe — sqlite_master has no penalty.
+            tables = mastr_db.list_tables()
+            if {"wind_extended", "solar_extended", "storage_extended"} <= set(tables):
+                return "sqlite", None
+        except Exception:
+            pass  # fall through to parquet
+    chosen = Path(bulk_dir) if bulk_dir else find_bulk_dir()
+    if chosen is None:
+        raise FileNotFoundError(
+            "source='auto' could not locate either the open-mastr SQLite DB or "
+            "a Zenodo parquet bulk dir (BNetzA_MaStR/). Run "
+            "`pixi run db-mastr-core` or place the Zenodo dump."
+        )
+    return "zenodo", chosen
+
+
 def load_from_bulk(
     tech: str,
     bulk_dir: Path | None = None,
+    source: str = "auto",
 ) -> tuple[pd.DataFrame, bool]:
-    """Load an open-MaStR Zenodo parquet snapshot for a single technology.
+    """Load an open-MaStR bulk snapshot for a single technology.
+
+    `source` selects the backing store:
+      * "auto"   — open-mastr SQLite if present, else Zenodo parquet (default).
+      * "sqlite" — force open-mastr SQLite via mastr_db.load_for_pipeline.
+      * "zenodo" — force the legacy Zenodo parquet path.
 
     Returns (df, is_bulk). DataFrame matches the column schema used by the
     existing JSON-scrape loaders (`load_records`, `load_bess`) so downstream
@@ -441,37 +498,34 @@ def load_from_bulk(
 
     `tech` ∈ {"pv", "wind", "bess"}.
     """
-    chosen = Path(bulk_dir) if bulk_dir else find_bulk_dir()
-    if chosen is None:
-        raise FileNotFoundError(
-            "No open-MaStR bulk dump found. Expected solar.parquet / wind.parquet"
-            " / storage.parquet under BNetzA_MaStR/."
-        )
-
-    # Prefer the merged historical+delta `full-*.parquet` when present;
-    # fall back to the bare Zenodo-snapshot file otherwise.
-    if tech == "pv":
-        path = chosen / "full-solar.parquet"
-        if not path.exists():
-            path = chosen / "solar.parquet"
-        energy_type = "Solare Strahlungsenergie"
-    elif tech == "wind":
-        path = chosen / "full-wind.parquet"
-        if not path.exists():
-            path = chosen / "wind.parquet"
-        energy_type = "Wind"
-    elif tech == "bess":
-        path = chosen / "full-storage.parquet"
-        if not path.exists():
-            path = chosen / "storage.parquet"
-        energy_type = "Speicher"
-    else:
+    if tech not in ("pv", "wind", "bess"):
         raise ValueError(f"unknown tech: {tech!r}")
 
-    if not path.exists():
-        raise FileNotFoundError(f"{path} not present in bulk dir {chosen}")
+    resolved, chosen = _resolve_bulk_source(source, bulk_dir)
 
-    df = pd.read_parquet(path)
+    energy_type = {
+        "pv":   "Solare Strahlungsenergie",
+        "wind": "Wind",
+        "bess": "Speicher",
+    }[tech]
+
+    if resolved == "sqlite":
+        import mastr_db
+        df = mastr_db.load_for_pipeline(tech)
+    else:
+        # Prefer the merged historical+delta `full-*.parquet` when present;
+        # fall back to the bare Zenodo-snapshot file otherwise.
+        bulk_filename = {
+            "pv":   ("full-solar.parquet",   "solar.parquet"),
+            "wind": ("full-wind.parquet",    "wind.parquet"),
+            "bess": ("full-storage.parquet", "storage.parquet"),
+        }[tech]
+        path = chosen / bulk_filename[0]
+        if not path.exists():
+            path = chosen / bulk_filename[1]
+        if not path.exists():
+            raise FileNotFoundError(f"{path} not present in bulk dir {chosen}")
+        df = pd.read_parquet(path)
 
     # Common renames + decorations to match the existing scrape schema.
     rename = {
