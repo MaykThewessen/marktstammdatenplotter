@@ -10,7 +10,8 @@
 *Installed wind (left) and PV (right, top 200 000 plants ≥ 49 kW) capacity
 per Kreis, 2005 → May 2026. 22 yearly frames plus a final May 2026 YTD
 snapshot from the live registry. Fixed Jenks bins so colors stay comparable
-across years.*
+across years. Available as `.gif` (universal autoplay) and `.mp4`
+(LinkedIn-native, ~30 % smaller, sharper) — see [`fig/`](fig/).*
 
 [![Docs](https://img.shields.io/badge/docs-github.io-blue?logo=github)](https://maykthewessen.github.io/marktstammdatenplotter/)
 [![Refresh CI](https://github.com/MaykThewessen/marktstammdatenplotter/actions/workflows/refresh-docs.yml/badge.svg)](https://github.com/MaykThewessen/marktstammdatenplotter/actions/workflows/refresh-docs.yml)

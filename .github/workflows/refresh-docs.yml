@@ -106,8 +106,10 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add fig/sample-*.svg fig/wind-*.gif fig/pv-*.gif \
+                  fig/wind-*.mp4 fig/pv-*.mp4 \
                   docs/assets/sample-*.svg \
                   docs/assets/wind-*.gif docs/assets/pv-*.gif \
+                  docs/assets/wind-*.mp4 docs/assets/pv-*.mp4 \
                   docs/assets/kreise.json \
                   docs/data/*.parquet docs/data/*.csv.gz \
                   docs/pv.html docs/wind.html || true

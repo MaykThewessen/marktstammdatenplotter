@@ -18,6 +18,20 @@ All notable changes to this project. Follows
   systematically-excluded category (sub-49 kW PV, NaT install rows, NaN
   coords, offshore choropleth, batteries, heat-only, etc.).
 
+### Changed
+- Intermediate frames switched from PNG to lossless WebP. Same fidelity
+  for ffmpeg, smaller on disk, gentler on the `fig/frames*/` working dirs.
+- Animation outputs now emit **two formats per technology** at 1233×1440 px:
+  `.gif` (universal autoplay) **and** `.mp4` (H.264, LinkedIn-native,
+  ~30 % smaller, sharper colors). `docs/index.html` uses `<video>` with
+  `<img>` fallback so MP4 plays inline when supported and GIF carries the
+  poster + fallback.
+
+  | Output | Wind | PV |
+  |---|---|---|
+  | GIF | 688 KB | 1.1 MB |
+  | MP4 | 476 KB | 916 KB |
+
 ### Fixed
 - **Title GW under-reported on choropleths.** `render_samples.py` and
   `render_wind_gif.py` titles previously used `agg["power_gw"].sum()` —

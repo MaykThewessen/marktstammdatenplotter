@@ -1,6 +1,9 @@
-# Ignore rendered PNG/MP4 outputs but keep documentation SVGs + curated GIFs.
+# Ignore rendered raster intermediates but keep documentation SVGs,
+# curated GIFs, and curated MP4s.
 *
 !.gitignore
 !*.svg
 !wind-*.gif
 !pv-*.gif
+!wind-*.mp4
+!pv-*.mp4

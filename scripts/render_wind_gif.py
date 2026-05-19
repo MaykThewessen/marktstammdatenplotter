@@ -29,7 +29,7 @@ PRESETS = {
         "energy_type": "Wind",
         "frame_prefix": "wind",
         "frames_dir": "fig/frames",
-        "gif_name": "wind-2005-may2026.gif",
+        "basename": "wind-2005-may2026",
         "cmap": "GnBu",
         "noun": "turbines",
         "title": "Installed wind capacity in Germany",
@@ -39,7 +39,7 @@ PRESETS = {
         "energy_type": "Solare Strahlungsenergie",
         "frame_prefix": "pv",
         "frames_dir": "fig/frames-pv",
-        "gif_name": "pv-2005-may2026.gif",
+        "basename": "pv-2005-may2026",
         "cmap": "YlOrRd",
         "noun": "plants",
         "title": "Installed PV capacity in Germany",
@@ -61,11 +61,17 @@ def snapshot_dates() -> list[date]:
     return dates
 
 
+FRAME_EXT = "webp"
+TARGET_HEIGHT = 1440
+FFMPEG_FRAMERATE = "3"
+
+
 def render_frames(records, units, cfg) -> tuple[int, Path]:
     frames = ROOT / cfg["frames_dir"]
     frames.mkdir(parents=True, exist_ok=True)
-    for old in frames.glob(f"{cfg['frame_prefix']}-*.png"):
-        old.unlink()
+    for old in frames.iterdir():
+        if old.is_file():
+            old.unlink()
 
     dates = snapshot_dates()
     agg_max, _ = mastr_plot.aggregate_by_unit(
@@ -86,42 +92,82 @@ def render_frames(records, units, cfg) -> tuple[int, Path]:
         fig = mastr_plot.plot_choropleth(
             agg, snap, title, bins=bins, cmap=cfg["cmap"],
         )
-        fig.savefig(frames / f"{cfg['frame_prefix']}-{idx:03d}.png",
-                    dpi=180, bbox_inches="tight")
+        # Lossless WebP via Pillow under the hood. Smaller than PNG at the
+        # same dpi and natively read by ffmpeg's webp decoder.
+        fig.savefig(
+            frames / f"{cfg['frame_prefix']}-{idx:03d}.{FRAME_EXT}",
+            dpi=180, bbox_inches="tight",
+            pil_kwargs={"lossless": True, "method": 4},
+        )
         plt.close(fig)
         idx += 1
 
-    last = frames / f"{cfg['frame_prefix']}-{idx - 1:03d}.png"
+    last = frames / f"{cfg['frame_prefix']}-{idx - 1:03d}.{FRAME_EXT}"
     for _ in range(HOLD_FRAMES):
-        shutil.copy(last, frames / f"{cfg['frame_prefix']}-{idx:03d}.png")
+        shutil.copy(last, frames / f"{cfg['frame_prefix']}-{idx:03d}.{FRAME_EXT}")
         idx += 1
     return idx, frames
 
 
-def assemble_gif(frames: Path, cfg):
-    out_gif = ROOT / "fig" / cfg["gif_name"]
-    docs_gif = ROOT / "docs" / "assets" / cfg["gif_name"]
+def _assemble(frames: Path, cfg, ext: str, vcodec_args: list[str]):
+    """Run ffmpeg over the frame sequence to produce `<basename>.<ext>`."""
+    out_path = ROOT / "fig" / f"{cfg['basename']}.{ext}"
+    docs_path = ROOT / "docs" / "assets" / f"{cfg['basename']}.{ext}"
     cmd = [
-        "ffmpeg", "-y", "-framerate", "3",
-        "-i", str(frames / f"{cfg['frame_prefix']}-%03d.png"),
-        "-vf", "scale=-1:1440:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=224[p];[s1][p]paletteuse=dither=bayer",
-        "-loop", "0", str(out_gif),
+        "ffmpeg", "-y", "-framerate", FFMPEG_FRAMERATE,
+        "-i", str(frames / f"{cfg['frame_prefix']}-%03d.{FRAME_EXT}"),
+        *vcodec_args,
+        str(out_path),
     ]
     subprocess.run(cmd, check=True)
-    shutil.copy(out_gif, docs_gif)
-    return out_gif
+    shutil.copy(out_path, docs_path)
+    return out_path
+
+
+def assemble_gif(frames: Path, cfg):
+    return _assemble(
+        frames, cfg, "gif",
+        [
+            "-vf",
+            f"scale=-1:{TARGET_HEIGHT}:flags=lanczos,"
+            "split[s0][s1];[s0]palettegen=max_colors=224[p];"
+            "[s1][p]paletteuse=dither=bayer",
+            "-loop", "0",
+        ],
+    )
+
+
+def assemble_mp4(frames: Path, cfg):
+    """H.264 MP4 — LinkedIn-native, ~30-50% smaller than the GIF.
+
+    yuv420p + even-dimensions for maximum player compatibility.
+    """
+    return _assemble(
+        frames, cfg, "mp4",
+        [
+            "-vf",
+            f"scale=-2:{TARGET_HEIGHT}:flags=lanczos,fps=10,format=yuv420p",
+            "-c:v", "libx264",
+            "-pix_fmt", "yuv420p",
+            "-preset", "slow",
+            "-crf", "18",
+            "-movflags", "+faststart",
+        ],
+    )
 
 
 def run_tech(tech: str):
     cfg = PRESETS[tech]
     records, demo = mastr_plot.load_records()
     if demo:
-        print(f"WARNING: rendering {tech} GIF from demo data.")
+        print(f"WARNING: rendering {tech} animation from demo data.")
     units, _ = mastr_plot.load_admin_units()
     n, frames = render_frames(records, units, cfg)
-    print(f"Rendered {n} PNG frames for {tech}.")
-    out = assemble_gif(frames, cfg)
-    print(f"GIF written to {out.relative_to(ROOT)}")
+    print(f"Rendered {n} WebP frames for {tech}.")
+    gif = assemble_gif(frames, cfg)
+    print(f"GIF written to {gif.relative_to(ROOT)} ({gif.stat().st_size / 1024:.0f} KiB)")
+    mp4 = assemble_mp4(frames, cfg)
+    print(f"MP4 written to {mp4.relative_to(ROOT)} ({mp4.stat().st_size / 1024:.0f} KiB)")
 
 
 def main():
