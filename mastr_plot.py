@@ -114,14 +114,36 @@ def _synthetic_records(n_pv: int = 4000, n_wind: int = 600, seed: int = 42) -> p
     return df
 
 
-def load_records(data_dir: Path | None = None, demo_if_missing: bool = True) -> tuple[pd.DataFrame, bool]:
+def load_records(data_dir: Path | None = None, demo_if_missing: bool = True,
+                 prefer_bulk: bool = True) -> tuple[pd.DataFrame, bool]:
     """Load records as a DataFrame.
 
     Returns (df, is_demo). When `is_demo` is True the rows are synthetic.
 
+    If `prefer_bulk=True` (default) and an open-MaStR bulk parquet dump is
+    on disk (BNetzA_MaStR/solar.parquet + wind.parquet), it is preferred
+    over the JSON-API scrape — covers the full ~ 5 M PV registry instead
+    of the top-200 k slice. Falls back to the JSON scrape automatically.
+
     If `data_dir` is None, all default dirs that hold *.json scrapes are merged
     so a single DataFrame contains wind + PV when both have been scraped.
     """
+    if prefer_bulk and data_dir is None and find_bulk_dir() is not None:
+        bulk_dir = find_bulk_dir()
+        frames = []
+        for tech in ("pv", "wind"):
+            path = bulk_dir / {"pv": "solar.parquet", "wind": "wind.parquet"}[tech]
+            if path.exists():
+                df, _ = load_from_bulk(tech, bulk_dir)
+                frames.append(df)
+        if frames:
+            df = pd.concat(frames, ignore_index=True)
+            # Drop tz so downstream snap-date comparisons work.
+            for col in ("install_date", "removal_date"):
+                if col in df.columns and hasattr(df[col].dtype, "tz") and df[col].dtype.tz is not None:
+                    df[col] = df[col].dt.tz_localize(None)
+            return df, False
+
     if data_dir is not None:
         dirs = [Path(data_dir)]
     else:
@@ -202,14 +224,25 @@ def bess_sector(energy_kwh: float | None) -> str:
     return BESS_SECTORS[2]
 
 
-def load_bess(data_dir: Path | None = None, demo_if_missing: bool = False) -> tuple[pd.DataFrame, bool]:
+def load_bess(data_dir: Path | None = None, demo_if_missing: bool = False,
+              prefer_bulk: bool = True) -> tuple[pd.DataFrame, bool]:
     """Load BESS records as a tidy DataFrame.
 
     Returns (df, is_demo). With demo_if_missing=False (default) a missing
     scrape raises FileNotFoundError — the BESS-specific synthetic dataset
     is not implemented yet because the per-Kreis names are pre-joined in
     the source JSON and the demo data wouldn't reflect that.
+
+    If `prefer_bulk=True` (default) and BNetzA_MaStR/storage.parquet is on
+    disk, that 1.75 M-row full registry slice is used instead of the
+    top-200k JSON scrape.
     """
+    if prefer_bulk and data_dir is None and find_bulk_dir() is not None:
+        bulk_dir = find_bulk_dir()
+        if (bulk_dir / "storage.parquet").exists():
+            df, _ = load_from_bulk("bess", bulk_dir)
+            return df, False
+
     candidates = [
         REPO_ROOT / "data-bess",
         REPO_ROOT.parent / "data-bess",
@@ -236,6 +269,271 @@ def load_bess(data_dir: Path | None = None, demo_if_missing: bool = False) -> tu
     df["is_battery"] = df["storage_tech"] == "Batterie"
     df["is_psh"] = df["storage_tech"] == "Pumpspeicher"
     return df, False
+
+
+#: Default search paths for the open-MaStR bulk parquet dump.
+#: Walks several parents to find a sibling BNetzA_MaStR/ — works whether the
+#: code runs from the main repo root or a git worktree.
+def _build_bulk_dir_candidates():
+    out = []
+    env = os.environ.get("MASTR_BULK_DIR")
+    if env:
+        out.append(Path(env))
+    p = REPO_ROOT
+    for _ in range(6):
+        out.append(p / "BNetzA_MaStR")
+        p = p.parent
+    return out
+
+
+DEFAULT_BULK_DIRS = _build_bulk_dir_candidates()
+
+
+def find_bulk_dir() -> Path | None:
+    """Locate an open-MaStR bulk parquet directory if present.
+
+    Honors the MASTR_BULK_DIR env var first, then walks up the directory
+    tree from REPO_ROOT looking for a sibling BNetzA_MaStR/ folder.
+    """
+    for c in DEFAULT_BULK_DIRS:
+        if c.exists() and any(c.glob("*.parquet")):
+            return c
+    return None
+
+
+def normalise_kreis_name(s):
+    """Normalise a German Landkreis name for fuzzy matching across sources.
+
+    Bridges the open-MaStR bulk dump's `landkreis` text values against the
+    deutschlandGeoJSON-derived GPKG `name` values. Mismatch patterns
+    observed:
+      * Parenthetical suffixes:        "Frankfurt (Oder)" → "frankfurt"
+      * -Kreis suffix (MaStR):         "Börde-Kreis" → "borde"
+      * Städte suffix (GPKG city):     "Amberg Städte" → "amberg"
+      * Stadt prefix:                  "Stadt Berlin" → "berlin"
+      * Landkreis prefix (rare):       "Landkreis Augsburg" → "augsburg"
+      * Whitespace + casing            normalised
+      * German umlauts                 collapsed to ASCII
+
+    Combined recovery on this dataset is ~84 % of solar GW. The residual
+    ~16 % sits in Kreise that were merged during the 2007 (Sachsen-Anhalt,
+    Sachsen) and 2011 (Mecklenburg-Vorpommern) administrative reforms —
+    MaStR uses the post-reform name (e.g. "Anhalt-Bitterfeld") while the
+    upstream GPKG still carries the pre-reform constituents
+    (e.g. "Anhalt-Zerbst", "Bitterfeld"). A current Kreise GeoJSON
+    would close that gap; not addressed here.
+    """
+    import re
+    if s is None or (isinstance(s, float) and pd.isna(s)):
+        return None
+    s = str(s).strip()
+    # Strip prefixes
+    s = re.sub(r"^(Stadt|Landkreis|Kreis|LK)\s+", "", s, flags=re.IGNORECASE)
+    # Strip suffixes
+    s = re.sub(r"\s+\([^)]+\)$", "", s)
+    s = re.sub(r"\s+St[aä]dte$", "", s, flags=re.IGNORECASE)
+    s = re.sub(r"\s+-?Kreis$", "", s, flags=re.IGNORECASE)
+    # Collapse whitespace, lowercase, ASCII-fold the umlauts so encoding
+    # quirks don't break the join.
+    umlaut = {"ä": "a", "ö": "o", "ü": "u", "ß": "ss",
+              "Ä": "a", "Ö": "o", "Ü": "u"}
+    for k, v in umlaut.items():
+        s = s.replace(k, v)
+    s = s.lower()
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+
+def load_from_bulk(
+    tech: str,
+    bulk_dir: Path | None = None,
+) -> tuple[pd.DataFrame, bool]:
+    """Load an open-MaStR Zenodo parquet snapshot for a single technology.
+
+    Returns (df, is_bulk). DataFrame matches the column schema used by the
+    existing JSON-scrape loaders (`load_records`, `load_bess`) so downstream
+    rendering works unchanged. Specifically: install_date, removal_date,
+    power, power_kw, energy_kwh, longitude, latitude, landkreis, bundesland,
+    energy_type, off_shore, owner_name.
+
+    `tech` ∈ {"pv", "wind", "bess"}.
+    """
+    chosen = Path(bulk_dir) if bulk_dir else find_bulk_dir()
+    if chosen is None:
+        raise FileNotFoundError(
+            "No open-MaStR bulk dump found. Expected solar.parquet / wind.parquet"
+            " / storage.parquet under BNetzA_MaStR/."
+        )
+
+    if tech == "pv":
+        path = chosen / "solar.parquet"
+        energy_type = "Solare Strahlungsenergie"
+    elif tech == "wind":
+        path = chosen / "wind.parquet"
+        energy_type = "Wind"
+    elif tech == "bess":
+        path = chosen / "storage.parquet"
+        energy_type = "Speicher"
+    else:
+        raise ValueError(f"unknown tech: {tech!r}")
+
+    if not path.exists():
+        raise FileNotFoundError(f"{path} not present in bulk dir {chosen}")
+
+    df = pd.read_parquet(path)
+
+    # Common renames + decorations to match the existing scrape schema.
+    rename = {
+        "mastr_id": "id",
+        "gross_capacity_kw": "power",
+        "usable_capacity_kwh": "energy_kwh",
+        "commissioning_date": "install_date",
+        "decommissioning_date": "removal_date",
+        "planned_commissioning_date": "planned_date",
+        "storage_technology": "storage_tech",
+        "einheit_name": "name",
+    }
+    df = df.rename(columns={k: v for k, v in rename.items() if k in df.columns})
+
+    df["energy_type"] = energy_type
+    # Strip tz so the rest of the pipeline (which uses tz-naive snap dates)
+    # can compare without warning.
+    for col in ("install_date", "removal_date", "planned_date"):
+        if col in df.columns:
+            ts = df[col]
+            if hasattr(ts.dtype, "tz") and ts.dtype.tz is not None:
+                df[col] = ts.dt.tz_localize(None)
+
+    # power_kw alias for BESS-style aggregations.
+    if "power" in df.columns:
+        df["power_kw"] = df["power"]
+
+    # Bulk dump anonymises owner_name for residential rows — column may
+    # be absent entirely. For wind, populate from `wind_park` (the
+    # MaStR project / Windpark name) so the per-project size-bin chart
+    # still produces a meaningful aggregation. Other techs get None.
+    if "owner_name" not in df.columns:
+        if tech == "wind" and "wind_park" in df.columns:
+            df["owner_name"] = df["wind_park"]
+        else:
+            df["owner_name"] = None
+
+    # Off-shore label only meaningful for wind in the JSON scrape; add
+    # a placeholder so concat with wind-only off_shore doesn't choke.
+    if "off_shore" not in df.columns:
+        df["off_shore"] = None
+
+    # Map bulk PV `location_type` (free German text) onto the short
+    # enum-decoded labels used by the JSON-scrape PV pipeline.
+    if tech == "pv" and "location_type" in df.columns:
+        loc_map = {
+            "Bauliche Anlagen (Hausdach, Gebäude und Fassade)": "building",
+            "Steckerfertige Solaranlage (sog. Balkonkraftwerk)": "balkonkraftwerk",
+            "Bauliche Anlagen (Sonstige)": "building_other",
+            "Freifläche": "free",
+            "Großparkplatz": "parking_lot",
+            "Gewässer": "water",
+        }
+        df["installation_type"] = df["location_type"].map(loc_map)
+        # Also derive `building_type` from `usage_type` for PV-by-use-case
+        # charts (Haushalt → household, etc.).
+        usage_map = {
+            "Haushalt": "household",
+            "Gewerbe, Handel und Dienstleistungen": "commercial",
+            "Industrie": "industry",
+            "Land-, Forst- und Fischereiwirtschaft": "farming",
+            "Öffentliche Einrichtungen": "public",
+        }
+        if "usage_type" in df.columns:
+            df["building_type"] = df["usage_type"].map(usage_map).where(
+                df["usage_type"].notna(), None,
+            )
+        # Map `orientation` text → `facing` decimal-degrees value matching
+        # the JSON-scrape's PowerPlant.facing field semantics.
+        if "orientation" in df.columns:
+            facing_map = {
+                "Nord": 0, "Nord-Ost": 45, "Ost": 90,
+                "Süd-Ost": 135, "Süd": 180, "Süd-West": 225,
+                "West": 270, "Nord-West": 315,
+                "Nachgeführt": "tracked", "Ost-West": "east-west",
+            }
+            df["facing"] = df["orientation"].map(facing_map)
+        else:
+            df["facing"] = None
+        # Tilt isn't in the bulk schema; downstream charts already accept None.
+        if "tilt" not in df.columns:
+            df["tilt"] = None
+        # is_private flag — bulk dump anonymises residential rows, but we can
+        # treat single-module Haushalt installations as private.
+        if "is_private" not in df.columns:
+            df["is_private"] = (df.get("usage_type") == "Haushalt") if "usage_type" in df.columns else False
+
+    # Add a normalised landkreis column for downstream name-based joins
+    # (saves re-running normalise_kreis_name() at every aggregation step).
+    if "landkreis" in df.columns:
+        df["landkreis_norm"] = df["landkreis"].apply(normalise_kreis_name)
+
+    # off_shore label for wind compatibility with the JSON-scrape schema.
+    if tech == "wind" and "location_type" in df.columns:
+        df["off_shore"] = df["location_type"].map(
+            {"Windkraft auf See": "Nordsee"}
+        )
+
+    # BESS-style helper columns so aggregate_bess_by_unit / sector / etc.
+    # all work against the bulk loader output.
+    if tech == "bess":
+        if "energy_kwh" in df.columns and "power_kw" in df.columns:
+            df["duration_h"] = df["energy_kwh"] / df["power_kw"].replace(0, np.nan)
+        if "energy_kwh" in df.columns:
+            df["sector"] = df["energy_kwh"].apply(bess_sector)
+        if "storage_tech" in df.columns:
+            df["is_battery"] = df["storage_tech"] == "Batterie"
+            df["is_psh"] = df["storage_tech"] == "Pumpspeicher"
+
+    if "install_date" in df.columns:
+        df["effective_date"] = df.get("install_date")
+        if "planned_date" in df.columns:
+            df["effective_date"] = df["install_date"].fillna(df["planned_date"])
+
+    return df, True
+
+
+def aggregate_by_landkreis_name(
+    records: pd.DataFrame,
+    admin_units,
+    plot_date: date,
+    *,
+    energy_type: str | None = None,
+    value_col: str = "power",
+    out_col: str = "power_gw",
+    divisor: float = 1e6,
+):
+    """Per-Kreis aggregation by **name** match instead of spatial join.
+
+    Critical for the bulk parquet dump where ~95 % of residential plants
+    have NaN lat/lon (BNetzA anonymises them) but `landkreis_norm` text
+    is present. Name match recovers ~86 % of records with the built-in
+    normalisation.
+    """
+    ts = pd.Timestamp(plot_date)
+    sub = records
+    if energy_type is not None:
+        sub = sub[sub["energy_type"] == energy_type]
+    sub = sub[
+        (sub["install_date"] <= ts)
+        & (sub["removal_date"].isna() | (sub["removal_date"] > ts))
+    ].copy()
+    if sub.empty:
+        out = admin_units.copy()
+        out[out_col] = 0.0
+        return out, sub
+
+    by_kreis = sub.groupby("landkreis_norm")[value_col].sum() / divisor
+    out = admin_units.copy()
+    # admin_units `name` may or may not need normalising. Build a lookup.
+    key = out["name"].apply(normalise_kreis_name)
+    out[out_col] = key.map(by_kreis).astype(float).fillna(0.0)
+    return out, sub
 
 
 def split_bess_storage(df: pd.DataFrame) -> dict:

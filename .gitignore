@@ -19,6 +19,9 @@ fig/frames-bess/
 # BESS scrape (heavy, regenerable)
 data-bess/
 
+# open-MaStR Zenodo bulk dump (regenerable from Zenodo record 14783581)
+BNetzA_MaStR/
+
 # Scrape outputs / OSM artifacts (regenerable)
 data-*.json
 *.o5m

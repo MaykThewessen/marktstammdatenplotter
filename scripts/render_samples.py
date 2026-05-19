@@ -85,6 +85,14 @@ def render_top_operators(records, out_name, top_n: int = 30):
         (sub["install_date"] <= SNAP)
         & (sub["removal_date"].isna() | (sub["removal_date"] > SNAP))
     ].copy()
+    # Bulk parquet anonymises owner_name for residential rows; skip those.
+    if "owner_name" not in active.columns or active["owner_name"].isna().all():
+        print("render_top_operators: no owner_name column available — skipping.")
+        return
+    active = active[active["owner_name"].notna()]
+    if active.empty:
+        print("render_top_operators: no rows with owner_name — skipping.")
+        return
     active["op"] = _normalize_op(active["owner_name"])
     active["tech"] = active["energy_type"].map(
         {"Wind": "Wind", "Solare Strahlungsenergie": "PV"}
@@ -310,15 +318,12 @@ def export_largest_plants(records, units, out_name, top_n: int = 10):
         sub = sub.sort_values("power", ascending=False).head(top_n)
         if sub.empty:
             return sub
-        pts = gpd.GeoDataFrame(
-            sub.reset_index(drop=True),
-            geometry=gpd.points_from_xy(sub["longitude"], sub["latitude"], crs="EPSG:4326"),
-        )
-        j = gpd.sjoin(pts, units[["name", "bundesland", "geometry"]],
-                      predicate="within", how="left")
-        j = j.loc[~j.index.duplicated(keep="first")]
-        sub["kreis"] = j["name"].reindex(sub.reset_index(drop=True).index).values
-        sub["bundesland"] = j["bundesland"].reindex(sub.reset_index(drop=True).index).values
+        if "landkreis" in sub.columns:
+            sub["kreis"] = sub["landkreis"]
+        else:
+            sub["kreis"] = None
+        if "bundesland" not in sub.columns:
+            sub["bundesland"] = None
         sub["mw"] = sub["power"] / 1000.0
         sub["install_year"] = pd.to_datetime(sub["install_date"]).dt.year
         return sub
@@ -557,19 +562,31 @@ def render_generation_by_size(records, energy_type: str, palette: list[str],
         (sub["install_date"] <= snap)
         & (sub["removal_date"].isna() | (sub["removal_date"] > snap))
     ].copy()
-    active = active.rename(columns={"power": "power_kw"})
+    # Don't introduce a duplicate `power_kw` column if the source already
+    # exposes one (bulk parquet path).
+    if "power_kw" not in active.columns:
+        active = active.rename(columns={"power": "power_kw"})
+    elif "power" in active.columns:
+        active = active.drop(columns=["power"])
 
     if aggregate_by:
         # Drop rows with missing owner — they can't be grouped meaningfully.
-        active = active[active[aggregate_by].notna()
-                        & (active[aggregate_by].astype(str).str.strip() != "")]
+        if aggregate_by not in active.columns:
+            print(f"render_generation_by_size: no {aggregate_by!r} column — "
+                  "falling back to per-unit aggregation.")
+            aggregate_by = None
+        else:
+            active = active[active[aggregate_by].notna()
+                            & (active[aggregate_by].astype(str).str.strip() != "")]
+    if aggregate_by:
         agg = (active.groupby(aggregate_by, dropna=False)["power_kw"]
                      .sum().reset_index())
         unit_count = len(active)
         project_count = len(agg)
+        total_gw = float(agg["power_kw"].sum()) / 1e6 if len(agg) else 0.0
         scope_label = (
             f"{project_count:,} projects (aggregated from {unit_count:,} "
-            f"{noun} sharing an owner) · {agg['power_kw'].sum() / 1e6:.1f} GW total"
+            f"{noun} sharing an owner) · {total_gw:.1f} GW total"
         )
         binned_input = agg
     else:
@@ -976,13 +993,17 @@ def render_state_ramp(records, units, out_name):
         records["energy_type"].isin(["Wind", "Solare Strahlungsenergie"])
         & (records["install_date"] >= "2000-01-01")
     ].copy()
-    pts = gpd.GeoDataFrame(
-        sub.reset_index(drop=True),
-        geometry=gpd.points_from_xy(sub["longitude"], sub["latitude"], crs="EPSG:4326"),
-    )
-    j = gpd.sjoin(pts, units[["bundesland", "geometry"]], predicate="within", how="left")
-    j = j.loc[~j.index.duplicated(keep="first")]
-    sub["bundesland"] = j["bundesland"].reindex(sub.reset_index(drop=True).index).values
+    # Prefer pre-joined `bundesland` from the bulk parquet — saves a 4 M-point
+    # spatial join. Fall back to sjoin only when the column isn't present.
+    if "bundesland" not in sub.columns or sub["bundesland"].isna().all():
+        pts = gpd.GeoDataFrame(
+            sub.reset_index(drop=True),
+            geometry=gpd.points_from_xy(sub["longitude"], sub["latitude"], crs="EPSG:4326"),
+        )
+        j = gpd.sjoin(pts, units[["bundesland", "geometry"]], predicate="within", how="left")
+        j = j.loc[~j.index.duplicated(keep="first")]
+        sub["bundesland"] = j["bundesland"].reindex(sub.reset_index(drop=True).index).values
+    sub = sub[sub["bundesland"].notna()]
 
     sub["month"] = sub["install_date"].dt.to_period("M")
     piv = (
@@ -1066,12 +1087,17 @@ def render_bundesland_chart(records, units, out_name):
             (sub["install_date"] <= SNAP)
             & (sub["removal_date"].isna() | (sub["removal_date"] > SNAP))
         ]
+        # If the source already carries `bundesland` (open-MaStR bulk
+        # dump has it pre-joined per row), use it directly. Otherwise
+        # fall back to a spatial join.
+        if "bundesland" in active.columns and active["bundesland"].notna().any():
+            return active.groupby("bundesland")["power"].sum().div(1e6)
         pts = gpd.GeoDataFrame(
             active.copy(),
             geometry=gpd.points_from_xy(active["longitude"], active["latitude"], crs="EPSG:4326"),
         )
         j = gpd.sjoin(pts, units[["bundesland", "geometry"]], predicate="within", how="left")
-        return j.groupby("bundesland")["power"].sum().div(1e6)
+        return j.groupby("bundesland_right")["power"].sum().div(1e6)
 
     wind_s = state_totals(records[records["energy_type"] == "Wind"]).rename("Wind")
     pv_s = state_totals(records[records["energy_type"] == "Solare Strahlungsenergie"]).rename("PV (≥200 kW)")

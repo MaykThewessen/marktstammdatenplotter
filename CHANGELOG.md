@@ -7,6 +7,28 @@ All notable changes to this project. Follows
 ## [Unreleased]
 
 ### Added
+- **Full-registry bulk loader (open-MaStR Zenodo).** New
+  `mastr_plot.load_from_bulk(tech)` reads pre-converted parquet
+  snapshots (`solar.parquet`, `wind.parquet`, `storage.parquet`)
+  from a sibling `BNetzA_MaStR/` directory. `load_records()` and
+  `load_bess()` now auto-prefer this source when present —
+  4.86 M PV plants instead of 200 k, **100.9 GW** active
+  (was 73 GW), 1.73 M BESS units (was 193 k).
+- `mastr_plot.normalise_kreis_name()` for fuzzy Kreis-name matching
+  between MaStR post-reform names and the pre-reform GPKG.
+  Recovers ~ 84 % of solar GW via name match; remaining ~ 16 % sits
+  in Kreise merged during the 2007 / 2011 admin reforms (documented
+  in the docstring).
+- `mastr_plot.aggregate_by_landkreis_name()` for direct per-Kreis
+  rollups without a 4.9 M-point spatial join.
+- `scripts/convert_storage_to_parquet.py` — joins the two storage
+  CSVs into a unified slim parquet (51 MB, 1.75 M rows).
+- `docs/data-sources/zenodo-open-mastr.md` documenting the Zenodo
+  bulk dump source, including the limitations (snapshot frozen at
+  2025-02-09, residential coordinate anonymisation, geographic-
+  reform Kreis-name gap).
+- `docs/data-sources/zenodo-wind-goal100.md` documenting the
+  Goal100 wind-specific Zenodo dataset (referenced earlier).
 - **Pumped-hydro storage (PSH) split out of BESS.** Following the
   battery-charts.de / BVES / EASE / EU SET-Plan reporting convention,
   PSH gets its own section + chart set (`sample-psh-map.svg`,

@@ -1,24 +1,16 @@
 [
   {
     "tech": "PV",
-    "mw": 200.0,
-    "owner": "BEE Solarpark Schafh\u00f6fen GmbH \uff06 Co. KG",
-    "kreis": "Regensburg",
-    "bundesland": "Bayern",
-    "install_year": null
-  },
-  {
-    "tech": "PV",
     "mw": 162.26,
-    "owner": "SILUX Solarpark 1 GmbH \uff06 Co. KG",
-    "kreis": "Leipziger Land",
+    "owner": "None",
+    "kreis": "Leipzig",
     "bundesland": "Sachsen",
     "install_year": 2024
   },
   {
     "tech": "PV",
     "mw": 153.13,
-    "owner": "EnBW Solarpark Gottesgabe GmbH",
+    "owner": "None",
     "kreis": "M\u00e4rkisch-Oderland",
     "bundesland": "Brandenburg",
     "install_year": 2022
@@ -26,7 +18,7 @@
   {
     "tech": "PV",
     "mw": 150.98,
-    "owner": "EnBW SunInvest GmbH \uff06 Co. KG",
+    "owner": "None",
     "kreis": "M\u00e4rkisch-Oderland",
     "bundesland": "Brandenburg",
     "install_year": 2022
@@ -34,129 +26,137 @@
   {
     "tech": "PV",
     "mw": 144.78,
-    "owner": "SILUX Solarpark 4 GmbH \uff06 Co. KG",
-    "kreis": "Leipziger Land",
+    "owner": "None",
+    "kreis": "Leipzig",
     "bundesland": "Sachsen",
     "install_year": 2024
   },
   {
     "tech": "PV",
-    "mw": 141.62,
-    "owner": "ET Solar Gallin-Kuppentin",
-    "kreis": "Parchim",
-    "bundesland": "Mecklenburg-Vorpommern",
-    "install_year": null
-  },
-  {
-    "tech": "PV",
     "mw": 133.3,
-    "owner": "LEPV Energiepark Bohrau GmbH \uff06 Co. KG",
+    "owner": "None",
     "kreis": "Spree-Nei\u00dfe",
     "bundesland": "Brandenburg",
     "install_year": null
   },
   {
     "tech": "PV",
+    "mw": 119.52,
+    "owner": "None",
+    "kreis": "Pforzheim",
+    "bundesland": "Baden-W\u00fcrttemberg",
+    "install_year": null
+  },
+  {
+    "tech": "PV",
     "mw": 109.71,
-    "owner": "SILUX Solarpark 2 GmbH \uff06 Co. KG",
-    "kreis": "Leipziger Land",
+    "owner": "None",
+    "kreis": "Leipzig",
     "bundesland": "Sachsen",
     "install_year": 2023
   },
   {
     "tech": "PV",
-    "mw": 102.29,
-    "owner": "CEE PVF Kl\u00fcden GmbH \uff06 Co. KG",
-    "kreis": "Ohrekreis",
-    "bundesland": "Sachsen-Anhalt",
-    "install_year": 2025
+    "mw": 88.68,
+    "owner": "None",
+    "kreis": "Ludwigslust-Parchim",
+    "bundesland": "Mecklenburg-Vorpommern",
+    "install_year": 2021
   },
   {
     "tech": "PV",
-    "mw": 95.0,
-    "owner": "PV Lako Angern GmbH \uff06 Co. KG",
-    "kreis": "Oder-Spree",
-    "bundesland": "Brandenburg",
+    "mw": 82.98,
+    "owner": "None",
+    "kreis": "Friesland",
+    "bundesland": "Niedersachsen",
+    "install_year": 2024
+  },
+  {
+    "tech": "PV",
+    "mw": 82.92,
+    "owner": "None",
+    "kreis": "Ludwigslust-Parchim",
+    "bundesland": "Mecklenburg-Vorpommern",
+    "install_year": 2021
+  },
+  {
+    "tech": "Wind",
+    "mw": 15.0,
+    "owner": "EnBW He Dreiht",
+    "kreis": null,
+    "bundesland": "Ausschlie\u00dfliche Wirtschaftszone",
     "install_year": null
   },
   {
     "tech": "Wind",
     "mw": 15.0,
-    "owner": "Nordseecluster A GmbH \uff06 Co. KG",
+    "owner": "Nordseecluster 1",
     "kreis": null,
-    "bundesland": null,
+    "bundesland": "Ausschlie\u00dfliche Wirtschaftszone",
     "install_year": null
   },
   {
     "tech": "Wind",
     "mw": 15.0,
-    "owner": "Nordseecluster A GmbH \uff06 Co. KG",
+    "owner": "NC 2",
     "kreis": null,
-    "bundesland": null,
+    "bundesland": "Ausschlie\u00dfliche Wirtschaftszone",
     "install_year": null
   },
   {
     "tech": "Wind",
     "mw": 15.0,
-    "owner": "Nordseecluster B GmbH \uff06 Co. KG",
+    "owner": "NC 2",
     "kreis": null,
-    "bundesland": null,
+    "bundesland": "Ausschlie\u00dfliche Wirtschaftszone",
     "install_year": null
   },
   {
     "tech": "Wind",
     "mw": 15.0,
-    "owner": "Nordseecluster A GmbH \uff06 Co. KG",
+    "owner": "NC 2",
     "kreis": null,
-    "bundesland": null,
+    "bundesland": "Ausschlie\u00dfliche Wirtschaftszone",
     "install_year": null
   },
   {
     "tech": "Wind",
     "mw": 15.0,
-    "owner": "Nordseecluster B GmbH \uff06 Co. KG",
+    "owner": "NC 2",
     "kreis": null,
-    "bundesland": null,
+    "bundesland": "Ausschlie\u00dfliche Wirtschaftszone",
     "install_year": null
   },
   {
     "tech": "Wind",
     "mw": 15.0,
-    "owner": "Windanker GmbH",
+    "owner": "NC 2",
     "kreis": null,
-    "bundesland": null,
+    "bundesland": "Ausschlie\u00dfliche Wirtschaftszone",
     "install_year": null
   },
   {
     "tech": "Wind",
     "mw": 15.0,
-    "owner": "Nordseecluster B GmbH \uff06 Co. KG",
+    "owner": "NC 2",
     "kreis": null,
-    "bundesland": null,
+    "bundesland": "Ausschlie\u00dfliche Wirtschaftszone",
     "install_year": null
   },
   {
     "tech": "Wind",
     "mw": 15.0,
-    "owner": "Nordseecluster A GmbH \uff06 Co. KG",
+    "owner": "NC 2",
     "kreis": null,
-    "bundesland": null,
+    "bundesland": "Ausschlie\u00dfliche Wirtschaftszone",
     "install_year": null
   },
   {
     "tech": "Wind",
     "mw": 15.0,
-    "owner": "Nordseecluster A GmbH \uff06 Co. KG",
+    "owner": "Nordseecluster 1",
     "kreis": null,
-    "bundesland": null,
-    "install_year": null
-  },
-  {
-    "tech": "Wind",
-    "mw": 15.0,
-    "owner": "Nordseecluster A GmbH \uff06 Co. KG",
-    "kreis": null,
-    "bundesland": null,
+    "bundesland": "Ausschlie\u00dfliche Wirtschaftszone",
     "install_year": null
   }
 ]
