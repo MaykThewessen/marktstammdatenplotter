@@ -76,21 +76,21 @@ back to a synthetic demo dataset so they always render.
 
 ### Sample renders (real MaStR data)
 
-Generated from a live scrape (May 2026) of the public Marktstammdatenregister
-API. **Wind** uses the full registry slice (42 495 turbines, every Kreis
-covered). **PV** uses the top 50 000 utility-scale plants sorted by capacity
-(`Bruttoleistung-desc`) — every plant ≥ 200 kW, capturing ≈ 70 GW of
-installed PV (the bulk of Germany's commercial + ground-mount fleet). Rooftop
-balcony solar (the long tail of 6 M plants below 200 kW) is excluded.
+Generated from the open-MaStR Zenodo full registry dump (cutoff 2025-02-09)
+merged with the MaStR API delta through May 2026. **Wind**: full registry
+(~42 k turbines, every Kreis covered). **PV**: full registry (~4.86 M
+plants, including all rooftop and balcony solar — no power threshold).
+**BESS**: top 200 k storage units by installed power (covers Pumpspeicher
+down to ~10 kW home batteries).
 
 | | |
 |---|---|
-| ![PV map — top 50k](fig/sample-pv-map.svg) | ![Wind map](fig/sample-wind-map.svg) |
-| ![PV growth — top 50k](fig/sample-pv-growth.svg) | ![Wind growth](fig/sample-wind-growth.svg) |
+| ![PV map](fig/sample-pv-map.svg) | ![Wind map](fig/sample-wind-map.svg) |
+| ![PV growth](fig/sample-pv-growth.svg) | ![Wind growth](fig/sample-wind-growth.svg) |
 
 > **2026-05-01 snapshot · real data:** 32 107 wind turbines active, 79.7 GW
-> total installed. PV map covers ~195 591 active plants ≥ 49 kW — 72.8 GW
-> combined. Offshore: 1 732 turbines · 10.4 GW (Nordsee + Ostsee).
+> total installed. PV: full registry, ~4.86 M plants. Offshore: 1 732 turbines
+> · 10.4 GW (Nordsee + Ostsee). BESS: 193 599 batteries active · 6.49 GW / 9.4 GWh.
 
 ### Per-unit size-bin distribution
 

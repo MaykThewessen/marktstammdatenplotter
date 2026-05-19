@@ -136,6 +136,7 @@ def run_full(energy_code: str, energy_name: str, out_dir: Path,
     if not per_page:
         save(all_entries, energy_name, "full", out_dir)
         return all_entries
+    return None  # per-page mode writes files directly; callers should not use return value
 
 
 def run_incremental(since: datetime, energy_code: str, energy_name: str, out_dir: Path):

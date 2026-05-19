@@ -14,7 +14,7 @@
 <meta property="og:description" content="Interactive choropleth maps + animated GIFs of installed wind and solar capacity per Kreis, live from the Marktstammdatenregister.">
 <meta property="og:url" content="https://maykthewessen.github.io/marktstammdatenplotter/">
 <meta property="og:image" content="https://maykthewessen.github.io/marktstammdatenplotter/assets/wind-2005-may2026.gif">
-<meta property="og:image:alt" content="Animated map of installed wind capacity in Germany, 2005 to 2025">
+<meta property="og:image:alt" content="Animated map of installed wind capacity in Germany, 2005 to May 2026">
 <meta property="og:site_name" content="Marktstammdatenplotter">
 
 <!-- Twitter / X -->
@@ -415,7 +415,7 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
           </video>
           <figcaption>
             Figure 10 — Yearly frames of installed wind capacity per Kreis,
-            2005 → 2025, plus a final May-2026 YTD snapshot. Fixed Jenks bins.
+            2005 → May 2026. Fixed Jenks bins.
             Also available:
             <a href="assets/wind-2005-may2026.mp4">.mp4</a> ·
             <a href="assets/wind-2005-may2026.gif">.gif</a>.
@@ -432,10 +432,9 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
           </video>
           <figcaption>
             Figure 11 — Yearly frames of installed PV capacity per Kreis,
-            2005 → 2025, plus a final May-2026 YTD snapshot. Covers the
-            200 000 largest plants (≥ 49 kW, ≈ 73 GW). Rooftop / balcony
-            long tail under 49 kW is excluded — capturing it would need
-            24 GB of JSON. Also available:
+            2005 → May 2026. Uses the full open-MaStR Zenodo registry
+            (~4.86 M plants, including rooftop and balcony solar — no
+            power threshold). Also available:
             <a href="assets/pv-2005-may2026.mp4">.mp4</a> ·
             <a href="assets/pv-2005-may2026.gif">.gif</a>.
           </figcaption>
@@ -446,10 +445,9 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
         <h2>Energy-type mix</h2>
         <p>
           National installed capacity per <code>Energietraeger</code>,
-          snapshot 2026-05-01. Numbers reflect this scrape (Wind: full
-          registry; PV: top 200 k by capacity; everything else: full
-          non-PV slice). True PV total is ~98 GW; this chart shows the
-          73 GW captured by the ≥ 49 kW slice.
+          snapshot 2026-05-01. Numbers reflect the open-MaStR Zenodo full
+          registry merged with the API delta through May 2026 — Wind, PV,
+          and storage all use the complete registry, no power threshold.
         </p>
         <figure>
           <object type="image/svg+xml" data="assets/sample-energy-mix.svg" aria-label="Energy-type mix"></object>
@@ -460,14 +458,14 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
       <section id="state-ramp">
         <h2>Build-out per Bundesland</h2>
         <p>
-          Monthly cumulative wind + PV ≥ 49 kW per state, 2000 → 2025.
+          Monthly cumulative wind + PV per state, 2000 → May 2026.
           Bayern (22 GW), Niedersachsen (19 GW) and Brandenburg (18 GW) lead.
           Sharp inflection around 2010 = PV boom; the post-2020 wedge is
           mostly utility-scale solar in the former-lignite belt.
         </p>
         <figure>
           <object type="image/svg+xml" data="assets/sample-state-ramp.svg" aria-label="Per-Bundesland ramp"></object>
-          <figcaption>Figure 16 — Renewable build-out per Bundesland, 2000 → 2025.</figcaption>
+          <figcaption>Figure 16 — Renewable build-out per Bundesland, 2000 → May 2026.</figcaption>
         </figure>
       </section>
 
@@ -632,16 +630,16 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
         <h3>21 years of battery + storage growth</h3>
         <figure>
           <video autoplay loop muted playsinline preload="metadata"
-                 poster="assets/bess-2005-may2026.gif"
+                 poster="assets/bess-2017-may2026.gif"
                  style="max-width:100%;border:1px solid var(--rtd-border);border-radius:4px;background:#fff;">
-            <source src="assets/bess-2005-may2026.mp4" type="video/mp4">
-            <img src="assets/bess-2005-may2026.gif" alt="BESS power per Kreis 2005 to May 2026 animation" style="max-width:100%">
+            <source src="assets/bess-2017-may2026.mp4" type="video/mp4">
+            <img src="assets/bess-2017-may2026.gif" alt="BESS power per Kreis 2017 to May 2026 animation" style="max-width:100%">
           </video>
           <figcaption>
-            Figure 30 — Yearly BESS power per Kreis, 2005 → May 2026.
+            Figure 30 — Yearly BESS power per Kreis, 2017 → May 2026.
             Also available:
-            <a href="assets/bess-2005-may2026.mp4">.mp4</a> ·
-            <a href="assets/bess-2005-may2026.gif">.gif</a>.
+            <a href="assets/bess-2017-may2026.mp4">.mp4</a> ·
+            <a href="assets/bess-2017-may2026.gif">.gif</a>.
           </figcaption>
         </figure>
       </section>

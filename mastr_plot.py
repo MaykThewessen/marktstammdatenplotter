@@ -188,7 +188,6 @@ def load_admin_units(gpkg_path: Path | None = None, demo_if_missing: bool = True
         return _synthetic_admin_units(), True
 
     gdf = gpd.read_file(chosen, layer="multipolygons")
-    gdf["geometry"] = gdf["geometry"].simplify(0.005, preserve_topology=True)
     return gdf, False
 
 
@@ -262,6 +261,10 @@ def load_bess(data_dir: Path | None = None, demo_if_missing: bool = False,
     df["sector"] = df["energy_kwh"].apply(bess_sector)
     df["is_battery"] = df["storage_tech"] == "Batterie"
     df["is_psh"] = df["storage_tech"] == "Pumpspeicher"
+    # Pre-compute normalised Kreis names — enables name-based fallback in
+    # aggregate_bess_by_unit for residential rows with anonymised coords.
+    if "landkreis" in df.columns:
+        df["landkreis_norm"] = df["landkreis"].apply(normalise_kreis_name)
     return df, False
 
 

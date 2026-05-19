@@ -511,7 +511,7 @@ def render_pv_orientation_polar(out_name):
         subset=["commissioning_date", "orientation"]
     )
     active = active.assign(year=active["commissioning_date"].dt.year.astype("Int64"))
-    active = active[active["year"].between(2000, 2025)]
+    active = active[active["year"].between(2000, SNAP.year)]
 
     MASTR_NAMES = {
         "N": "Nord", "NO": "Nord-Ost", "O": "Ost", "SO": "Süd-Ost",
@@ -813,11 +813,11 @@ def render_wind_age(records, out_name):
           .fillna(0.0)
           .sort_values("install_year")
     )
-    merged = merged[(merged["install_year"] >= 1990) & (merged["install_year"] <= 2025)]
+    merged = merged[(merged["install_year"] >= 1990) & (merged["install_year"] <= SNAP.year)]
 
     active = wind.dropna(subset=["install_year"])
     mean_mw = active.groupby("install_year")["mw"].mean()
-    mean_mw = mean_mw[(mean_mw.index >= 1995) & (mean_mw.index <= 2025)]
+    mean_mw = mean_mw[(mean_mw.index >= 1995) & (mean_mw.index <= SNAP.year)]
 
     fig, axs = plt.subplots(2, 1, figsize=(11, 8), dpi=120, sharex=True)
     ax = axs[0]
@@ -1360,7 +1360,7 @@ def render_state_ramp(records, units, out_name):
                  colors=palette, alpha=0.92, linewidth=0)
     ax.set_ylabel("Cumulative installed [GW] (Wind + PV)")
     ax.set_title(
-        "Renewable build-out per Bundesland, 2000 → 2025\n"
+        f"Renewable build-out per Bundesland, 2000 → {SNAP.year}\n"
         "(MaStR · full registry)"
     )
     ax.legend(loc="upper left", ncol=2, fontsize=9, framealpha=0.9)
@@ -1403,7 +1403,7 @@ def render_pv_by_type(records, out_name):
     ax.stackplot(piv.index, piv.values.T, labels=piv.columns,
                  colors=palette, alpha=0.95, linewidth=0)
     ax.set_ylabel("Cumulative PV [GW]")
-    ax.set_title("PV build-out by installation type, 2000 → 2025")
+    ax.set_title(f"PV build-out by installation type, 2000 → {SNAP.year}")
     ax.legend(loc="upper left", fontsize=9, framealpha=0.92)
     ax.grid(alpha=0.3)
 
