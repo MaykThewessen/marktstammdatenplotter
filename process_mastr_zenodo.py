@@ -29,19 +29,20 @@ STORAGE_CSV       = DATA_DIR / "bnetza_mastr_storage_raw.csv"
 STORAGE_UNITS_CSV = DATA_DIR / "bnetza_mastr_storage_units_raw.csv"
 
 COMMON_COLS = {
-    "EinheitMastrNummer":          "mastr_id",
-    "Inbetriebnahmedatum":         "commissioning_date",
-    "DatumEndgueltigeStilllegung": "decommissioning_date",
-    "EinheitBetriebsstatus":       "status",
-    "Nettonennleistung":           "net_capacity_kw",
-    "Bruttoleistung":              "gross_capacity_kw",
-    "Bundesland":                  "bundesland",
-    "Landkreis":                   "landkreis",
-    "Gemeinde":                    "municipality",
-    "Gemeindeschluessel":          "municipality_key",
-    "Laengengrad":                 "longitude",
-    "Breitengrad":                 "latitude",
-    "Lage":                        "location_type",
+    "EinheitMastrNummer":              "mastr_id",
+    "Inbetriebnahmedatum":             "commissioning_date",
+    "GeplantesInbetriebnahmedatum":    "planned_commissioning_date",
+    "DatumEndgueltigeStilllegung":     "decommissioning_date",
+    "EinheitBetriebsstatus":           "status",
+    "Nettonennleistung":               "net_capacity_kw",
+    "Bruttoleistung":                  "gross_capacity_kw",
+    "Bundesland":                      "bundesland",
+    "Landkreis":                       "landkreis",
+    "Gemeinde":                        "municipality",
+    "Gemeindeschluessel":              "municipality_key",
+    "Laengengrad":                     "longitude",
+    "Breitengrad":                     "latitude",
+    "Lage":                            "location_type",
 }
 
 WIND_EXTRA = {
@@ -73,7 +74,7 @@ NUMERIC_COLS = [
     "hub_height_m", "rotor_diameter_m", "latitude", "longitude", "module_count",
     "charge_power_kw", "usable_capacity_kwh",
 ]
-DATE_COLS    = ["commissioning_date", "decommissioning_date"]
+DATE_COLS    = ["commissioning_date", "planned_commissioning_date", "decommissioning_date"]
 CATEGORY_COLS = ["status", "bundesland", "landkreis", "location_type", "usage_type",
                  "orientation", "manufacturer", "turbine_type",
                  "technology", "battery_type", "pumped_hydro_type", "ac_dc_coupling", "use_case"]

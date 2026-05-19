@@ -19,9 +19,7 @@ from pathlib import Path
 import httpx
 import pandas as pd
 
-BULK = Path(
-    "/Users/mayk/DE_Wind_marktstammdatenplotter/marktstammdatenplotter/BNetzA_MaStR"
-)
+BULK = Path(__file__).resolve().parent.parent / "BNetzA_MaStR"
 BASE = BULK / "storage.parquet"
 OUT = BULK / "full-storage.parquet"
 
