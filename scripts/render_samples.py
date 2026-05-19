@@ -462,6 +462,166 @@ def render_wind_age(records, out_name):
     plt.close(fig)
 
 
+def render_bess_charts(bess_df, units, out_power: str, out_energy: str,
+                       out_duration: str, out_techmix: str, out_growth: str):
+    """Render all five BESS sample charts in one pass."""
+    import matplotlib.colors as mcolors
+
+    snap = SNAP
+    agg, active = mastr_plot.aggregate_bess_by_unit(bess_df, units, snap.date())
+    active_gw = active["power_kw"].sum() / 1e6
+    active_gwh = active["energy_kwh"].sum() / 1e6
+
+    # -- Power choropleth -----------------------------------------------------
+    pos = agg["power_gw"][agg["power_gw"] > 0].to_numpy()
+    bins = mastr_plot.jenks_bins(pos, k=7)
+    if len(bins) < 2:
+        bins = [0.0, max(1.0, float(pos.max() or 1.0))]
+    norm = mcolors.BoundaryNorm(bins, ncolors=256)
+    fig, ax = plt.subplots(figsize=(9, 11), dpi=120)
+    agg.plot(
+        column="power_gw", ax=ax, cmap="BuPu", norm=norm,
+        edgecolor="white", linewidth=0.3, legend=True,
+        legend_kwds={"label": "BESS power [GW]", "shrink": 0.6},
+        missing_kwds={"color": "#eeeeee"},
+    )
+    ax.set_axis_off()
+    ax.set_title(
+        f"Battery storage power per Kreis — {snap.date()}\n"
+        f"{len(active):,} units · {active_gw:.2f} GW · {active_gwh:.1f} GWh",
+        fontsize=13,
+    )
+    fig.tight_layout()
+    for d in (FIG, DOCS):
+        fig.savefig(d / out_power, format="svg", bbox_inches="tight")
+    plt.close(fig)
+
+    # -- Energy choropleth ----------------------------------------------------
+    pos_e = agg["energy_gwh"][agg["energy_gwh"] > 0].to_numpy()
+    bins_e = mastr_plot.jenks_bins(pos_e, k=7)
+    if len(bins_e) < 2:
+        bins_e = [0.0, max(1.0, float(pos_e.max() or 1.0))]
+    norm_e = mcolors.BoundaryNorm(bins_e, ncolors=256)
+    fig, ax = plt.subplots(figsize=(9, 11), dpi=120)
+    agg.plot(
+        column="energy_gwh", ax=ax, cmap="BuPu", norm=norm_e,
+        edgecolor="white", linewidth=0.3, legend=True,
+        legend_kwds={"label": "BESS energy [GWh]", "shrink": 0.6},
+        missing_kwds={"color": "#eeeeee"},
+    )
+    ax.set_axis_off()
+    ax.set_title(
+        f"Battery storage energy per Kreis — {snap.date()}\n"
+        f"{len(active):,} units · {active_gwh:.1f} GWh total",
+        fontsize=13,
+    )
+    fig.tight_layout()
+    for d in (FIG, DOCS):
+        fig.savefig(d / out_energy, format="svg", bbox_inches="tight")
+    plt.close(fig)
+
+    # -- Duration histogram (Batterie only) -----------------------------------
+    b = bess_df[
+        (bess_df["storage_tech"] == "Batterie")
+        & bess_df["install_date"].notna()
+        & (bess_df["install_date"] <= snap)
+        & bess_df["duration_h"].notna()
+        & (bess_df["duration_h"] > 0)
+        & (bess_df["duration_h"] < 24)
+    ]
+    fig, ax = plt.subplots(figsize=(11, 5), dpi=120)
+    hist, edges = np.histogram(
+        b["duration_h"], bins=np.linspace(0, 10, 60),
+        weights=b["power_kw"] / 1000,  # MW per bin
+    )
+    ax.bar(edges[:-1], hist, width=np.diff(edges), align="edge",
+           color="#a78bfa", edgecolor="#5b21b6", linewidth=0.4)
+    ax.axvline(2, color="#dc2626", linewidth=1.2, linestyle="--", alpha=0.7)
+    ax.text(2.05, ax.get_ylim()[1] * 0.92,
+            "2 h\nhybrid PV / grid-services split",
+            color="#dc2626", fontsize=9)
+    ax.set_xlabel("Duration [h] = energy / power")
+    ax.set_ylabel("Installed power per bin [MW]")
+    ax.set_title(
+        f"BESS duration distribution — {snap.date()} (Batterie only)\n"
+        f"{len(b):,} units · {b['power_kw'].sum() / 1e6:.2f} GW · capacity-weighted"
+    )
+    ax.grid(alpha=0.3)
+    fig.tight_layout()
+    for d in (FIG, DOCS):
+        fig.savefig(d / out_duration, format="svg", bbox_inches="tight")
+    plt.close(fig)
+
+    # -- Tech mix (power + energy) --------------------------------------------
+    mix = (
+        active.groupby("storage_tech")
+              .agg(power_gw=("power_kw", lambda s: s.sum() / 1e6),
+                   energy_gwh=("energy_kwh", lambda s: s.sum() / 1e6),
+                   n=("id", "size"))
+              .sort_values("power_gw")
+    )
+    fig, axs = plt.subplots(1, 2, figsize=(13, 4), dpi=120)
+    y = range(len(mix))
+    axs[0].barh(y, mix["power_gw"], color="#a78bfa",
+                edgecolor="#1e293b", linewidth=0.4)
+    axs[0].set_yticks(list(y))
+    axs[0].set_yticklabels(mix.index)
+    axs[0].set_xlabel("Power [GW]")
+    axs[0].set_title("Storage technology · installed power")
+    axs[0].grid(axis="x", alpha=0.3)
+    if len(mix) and mix["power_gw"].max() > 0:
+        for i, (gw, n) in enumerate(zip(mix["power_gw"], mix["n"])):
+            axs[0].text(gw + mix["power_gw"].max() * 0.01, i,
+                        f"{int(n):,} units", va="center",
+                        fontsize=9, color="#475569")
+    axs[1].barh(y, mix["energy_gwh"], color="#0ea5e9",
+                edgecolor="#1e293b", linewidth=0.4)
+    axs[1].set_yticks(list(y))
+    axs[1].set_yticklabels(mix.index)
+    axs[1].set_xlabel("Energy [GWh]")
+    axs[1].set_title("Storage technology · usable energy capacity")
+    axs[1].grid(axis="x", alpha=0.3)
+    fig.suptitle(
+        f"Battery + other electricity storage by technology — {snap.date()} (active)",
+        fontsize=13,
+    )
+    fig.tight_layout()
+    for d in (FIG, DOCS):
+        fig.savefig(d / out_techmix, format="svg", bbox_inches="tight")
+    plt.close(fig)
+
+    # -- Cumulative growth (dual axis power + energy) --------------------------
+    g = bess_df[
+        bess_df["install_date"].notna()
+        & (bess_df["install_date"] >= "2010-01-01")
+    ].copy()
+    g["month"] = g["install_date"].dt.to_period("M")
+    monthly_p = g.groupby("month")["power_kw"].sum().div(1e6).cumsum()
+    monthly_e = g.groupby("month")["energy_kwh"].sum().div(1e6).cumsum()
+    monthly_p.index = monthly_p.index.to_timestamp()
+    monthly_e.index = monthly_e.index.to_timestamp()
+    fig, ax = plt.subplots(figsize=(11, 4.5), dpi=120)
+    ax2 = ax.twinx()
+    ax.fill_between(monthly_p.index, monthly_p.values,
+                    color="#a78bfa", alpha=0.35)
+    ax.plot(monthly_p.index, monthly_p.values, color="#6d28d9", linewidth=2.2)
+    ax2.plot(monthly_e.index, monthly_e.values,
+             color="#0ea5e9", linewidth=2.2, linestyle="--")
+    ax.set_ylabel("Cumulative power [GW]", color="#6d28d9")
+    ax2.set_ylabel("Cumulative energy [GWh]", color="#0ea5e9")
+    ax.set_title("Cumulative BESS power + energy capacity in Germany")
+    ax.grid(alpha=0.3)
+    from matplotlib.lines import Line2D
+    ax.legend(handles=[
+        Line2D([0], [0], color="#6d28d9", linewidth=2, label="Power [GW]"),
+        Line2D([0], [0], color="#0ea5e9", linewidth=2, linestyle="--", label="Energy [GWh]"),
+    ], loc="upper left")
+    fig.tight_layout()
+    for d in (FIG, DOCS):
+        fig.savefig(d / out_growth, format="svg", bbox_inches="tight")
+    plt.close(fig)
+
+
 def render_state_ramp(records, units, out_name):
     sub = records[
         records["energy_type"].isin(["Wind", "Solare Strahlungsenergie"])
@@ -632,6 +792,22 @@ def main():
     export_largest_plants(records, units, "largest-plants.json")
     render_pv_orientation(records, "sample-pv-orientation.svg")
     render_wind_age(records, "sample-wind-age.svg")
+
+    # BESS slice lives in its own data-bess/ dir; render only if present.
+    try:
+        bess_df, _ = mastr_plot.load_bess()
+    except FileNotFoundError:
+        print("BESS scrape not present — skipping BESS charts.")
+    else:
+        render_bess_charts(
+            bess_df, units,
+            out_power="sample-bess-power-map.svg",
+            out_energy="sample-bess-energy-map.svg",
+            out_duration="sample-bess-duration.svg",
+            out_techmix="sample-bess-tech-mix.svg",
+            out_growth="sample-bess-growth.svg",
+        )
+
     print("Sample renders complete.")
 
 

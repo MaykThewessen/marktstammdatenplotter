@@ -176,6 +176,77 @@ def load_admin_units(gpkg_path: Path | None = None, demo_if_missing: bool = True
     return gdf, False
 
 
+def load_bess(data_dir: Path | None = None, demo_if_missing: bool = False) -> tuple[pd.DataFrame, bool]:
+    """Load BESS records as a tidy DataFrame.
+
+    Returns (df, is_demo). With demo_if_missing=False (default) a missing
+    scrape raises FileNotFoundError — the BESS-specific synthetic dataset
+    is not implemented yet because the per-Kreis names are pre-joined in
+    the source JSON and the demo data wouldn't reflect that.
+    """
+    candidates = [
+        REPO_ROOT / "data-bess",
+        REPO_ROOT.parent / "data-bess",
+    ]
+    if data_dir is not None:
+        chosen = Path(data_dir)
+    else:
+        chosen = next((c for c in candidates if c.exists() and any(c.glob("*.json"))), None)
+    if chosen is None:
+        if not demo_if_missing:
+            raise FileNotFoundError(
+                "No BESS scrape found. Run `pixi run scrape-bess` first."
+            )
+        return pd.DataFrame(), True
+
+    units = mastr_parser.load_bess(str(chosen))
+    df = pd.DataFrame([u.__dict__ for u in units])
+    df["install_date"] = pd.to_datetime(df["install_date"]).dt.tz_localize(None)
+    df["planned_date"] = pd.to_datetime(df["planned_date"]).dt.tz_localize(None)
+    df["removal_date"] = pd.to_datetime(df["removal_date"]).dt.tz_localize(None)
+    df["effective_date"] = df["install_date"].fillna(df["planned_date"])
+    df["duration_h"] = df["energy_kwh"] / df["power_kw"].replace(0, np.nan)
+    return df, False
+
+
+def aggregate_bess_by_unit(
+    records: pd.DataFrame,
+    admin_units,
+    plot_date: date,
+    *,
+    include_planned: bool = False,
+):
+    """Spatial-join active BESS to admin units and sum power (GW) and energy (GWh).
+
+    `include_planned=True` adds units whose `install_date` is NaT but whose
+    `planned_date` precedes `plot_date` — useful for the Jänschwalde-style
+    pipeline view of the next few years.
+    """
+    import geopandas as gpd
+
+    ts = pd.Timestamp(plot_date)
+    date_col = "effective_date" if include_planned else "install_date"
+    sub = records[
+        (records[date_col] <= ts)
+        & (records["removal_date"].isna() | (records["removal_date"] > ts))
+    ].copy()
+    if sub.empty:
+        out = admin_units.copy()
+        out["power_gw"] = 0.0
+        out["energy_gwh"] = 0.0
+        return out, sub
+
+    geom = gpd.points_from_xy(sub["longitude"], sub["latitude"], crs="EPSG:4326")
+    pts = gpd.GeoDataFrame(sub, geometry=geom, crs="EPSG:4326")
+    joined = gpd.sjoin(pts, admin_units[["geometry"]], predicate="within", how="left")
+    pwr = joined.groupby("index_right")["power_kw"].sum() / 1e6   # kW → GW
+    enr = joined.groupby("index_right")["energy_kwh"].sum() / 1e6  # kWh → GWh
+    out = admin_units.copy()
+    out["power_gw"] = out.index.map(pwr).astype(float).fillna(0.0)
+    out["energy_gwh"] = out.index.map(enr).astype(float).fillna(0.0)
+    return out, sub
+
+
 def jenks_bins(values: np.ndarray, k: int = 7) -> list[float]:
     """Jenks-style natural breaks; falls back to quantiles if mapclassify missing."""
     values = np.asarray(values)

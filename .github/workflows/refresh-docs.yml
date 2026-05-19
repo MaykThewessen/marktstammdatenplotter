@@ -65,6 +65,22 @@ jobs:
           done
           wait
 
+      - name: Scrape MaStR (BESS top-200k)
+        run: |
+          mkdir -p data-bess
+          for p in $(seq 1 8); do
+            curl --get \
+              'https://www.marktstammdatenregister.de/MaStR/Einheit/EinheitJson/GetErweiterteOeffentlicheEinheitStromerzeugung' \
+              --data-urlencode 'sort=Bruttoleistung-desc' \
+              --data-urlencode "page=${p}" \
+              --data-urlencode 'pageSize=25000' \
+              --data-urlencode 'group=' \
+              --data-urlencode "filter=Energieträger~eq~'2496'" \
+              --data-urlencode 'forExport=true' \
+              -o "data-bess/data-${p}.json" &
+          done
+          wait
+
       - name: Scrape MaStR (PV top-200k)
         env:
           PAGES_PV: ${{ github.event.inputs.pages_to_scrape_pv || '8' }}
@@ -86,8 +102,8 @@ jobs:
       - name: Re-render sample SVGs + Bundesland chart
         run: pixi run python scripts/render_samples.py
 
-      - name: Re-render wind + PV animation GIFs
-        run: pixi run python scripts/render_wind_gif.py both
+      - name: Re-render wind + PV + BESS animation GIFs + MP4s
+        run: pixi run python scripts/render_wind_gif.py all
 
       - name: Rebuild per-Kreis JSON
         run: pixi run python scripts/build_kreise_json.py
@@ -105,11 +121,12 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add fig/sample-*.svg fig/wind-*.gif fig/pv-*.gif \
-                  fig/wind-*.mp4 fig/pv-*.mp4 \
+          git add fig/sample-*.svg \
+                  fig/wind-*.gif fig/pv-*.gif fig/bess-*.gif \
+                  fig/wind-*.mp4 fig/pv-*.mp4 fig/bess-*.mp4 \
                   docs/assets/sample-*.svg \
-                  docs/assets/wind-*.gif docs/assets/pv-*.gif \
-                  docs/assets/wind-*.mp4 docs/assets/pv-*.mp4 \
+                  docs/assets/wind-*.gif docs/assets/pv-*.gif docs/assets/bess-*.gif \
+                  docs/assets/wind-*.mp4 docs/assets/pv-*.mp4 docs/assets/bess-*.mp4 \
                   docs/assets/kreise.json \
                   docs/data/*.parquet docs/data/*.csv.gz \
                   docs/pv.html docs/wind.html || true

@@ -141,6 +141,31 @@ Decommission wave from 2019 onwards: first EEG cohort reaching its 20-year
 boundary. Mean per-turbine MW has grown 15× since the late 90s (0.5 → 7 MW),
 driven by the new 15 MW offshore class.
 
+### Battery + electricity storage (BESS)
+
+![BESS power per Kreis](fig/sample-bess-power-map.svg)
+
+MaStR carries 2.5 M storage records under `Energieträger=2496`. Top 200k by
+power covers everything from the 1 GW **GigaBattery Jänschwalde** (planned)
+down to ~10 kW home batteries.
+
+**Snapshot 2026-05-01:** 193 678 units · **7.86 GW / 98.9 GWh** active.
+Pipeline (+ planned-and-permitted): **25 GW / 2 565 GWh** by ~2028.
+
+| Power split | Energy split |
+|---|---|
+| Pumpspeicher 6.48 GW (41 sites) | Pumpspeicher 927 GWh |
+| Batterie 6.49 GW (193k units) | Batterie 9.4 GWh |
+
+Roughly equal power, ~100× energy asymmetry — Li-ion sits in the 1-2 h
+duration band; hydro PSH is built for many hours.
+
+| Duration histogram | Tech mix |
+|---|---|
+| ![BESS duration](fig/sample-bess-duration.svg) | ![BESS tech mix](fig/sample-bess-tech-mix.svg) |
+
+![BESS cumulative growth](fig/sample-bess-growth.svg)
+
 ### Capacity density (MW per km²)
 
 Absolute capacity makes large rural Kreise look more impressive than they

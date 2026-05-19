@@ -7,6 +7,31 @@ All notable changes to this project. Follows
 ## [Unreleased]
 
 ### Added
+- **Battery + electricity storage (BESS) coverage.** Scrapes
+  `Energieträger=2496` (Speicher) from the same `Stromerzeugung`
+  endpoint — top 200 000 units by `Bruttoleistung` (`pixi run scrape-bess`).
+  Result: 193 678 active units / **7.86 GW / 98.9 GWh** at 2026-05-01;
+  4 193 planned units in the pipeline (Jänschwalde 1 GW, Boxberg 400 MW,
+  …) pointing at 25 GW / 2 565 GWh by ~ 2028.
+- `parser.BatteryUnit` dataclass with `parser.load_bess()`. Energy
+  capacity (`NutzbareSpeicherkapazitaet`), storage tech
+  (`Stromspeichertechnologie`), planned commissioning date, voltage
+  level, status — all preserved. Kreis + Bundesland are pre-joined in
+  source JSON, no spatial join needed.
+- `mastr_plot.load_bess()`, `mastr_plot.aggregate_bess_by_unit()` with
+  optional `include_planned=True` for the pipeline view.
+- Five new BESS sample SVGs: power-per-Kreis choropleth, energy-per-Kreis
+  choropleth, capacity-weighted duration histogram (Batterie only — bimodal
+  at 1 h hybrid PV + 2-4 h grid-services), tech mix (power + energy
+  side-by-side), cumulative growth dual-axis (GW + GWh).
+- `bess-2005-may2026.gif` + `.mp4` animations alongside wind + PV.
+- 5 new pytest cases covering `BatteryUnit.from_json` (round-trip,
+  non-BESS rejection, planned-only records, private-owner flag, missing
+  capacity). 57 tests total, all passing in 0.59 s.
+- `pixi run scrape-bess`, `pixi run render-bess`, plus `render-gifs`
+  bumped from `both` to `all` (wind + PV + BESS).
+- New "Battery + electricity storage (BESS)" section in README + docs
+  site sidebar.
 - Solar PV orientation analysis (capacity-weighted facing + tilt distribution).
 - Wind turbine age histogram + repowering signal + upsizing curve.
 - `CHANGELOG.md` (this file) and `CONTRIBUTING.md`.

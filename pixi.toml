@@ -53,6 +53,23 @@ for p in 1 2 3 4 5 6 7 8; do \
 done; wait
 """
 
+# Battery + other electricity storage. Same endpoint as Stromerzeugung,
+# filtered to Energieträger=2496 (Speicher). Top 200k by power captures
+# everything from grid-scale Pumpspeicher down to ~10 kW home batteries.
+scrape-bess = """
+mkdir -p data-bess && \
+for p in 1 2 3 4 5 6 7 8; do \
+  curl --get 'https://www.marktstammdatenregister.de/MaStR/Einheit/EinheitJson/GetErweiterteOeffentlicheEinheitStromerzeugung' \
+    --data-urlencode 'sort=Bruttoleistung-desc' \
+    --data-urlencode "page=$p" \
+    --data-urlencode 'pageSize=25000' \
+    --data-urlencode 'group=' \
+    --data-urlencode "filter=Energieträger~eq~'2496'" \
+    --data-urlencode 'forExport=true' \
+    -o "data-bess/data-$p.json" & \
+done; wait
+"""
+
 fetch-kreise = """
 curl -sSL -o /tmp/kreise.geojson \
   'https://raw.githubusercontent.com/isellsoap/deutschlandGeoJSON/main/4_kreise/4_niedrig.geo.json' && \
@@ -77,9 +94,10 @@ python -m marimo export html wind.py -o docs/wind.html
 render-samples = "python scripts/render_samples.py"
 
 # Re-render multi-year animation GIFs. Pass wind | pv | both (default both).
-render-gifs   = "python scripts/render_wind_gif.py both"
+render-gifs   = "python scripts/render_wind_gif.py all"
 render-wind   = "python scripts/render_wind_gif.py wind"
 render-pv     = "python scripts/render_wind_gif.py pv"
+render-bess   = "python scripts/render_wind_gif.py bess"
 
 # Rebuild the per-Kreis JSON that drives the sortable docs table.
 build-kreise   = "python scripts/build_kreise_json.py"

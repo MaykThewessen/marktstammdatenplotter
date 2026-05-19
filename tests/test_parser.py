@@ -198,6 +198,79 @@ class TestPrivateFlag:
         assert pp.is_private is False
 
 
+class TestBatteryUnit:
+    """BatteryUnit.from_json — Energieträger 2496 only."""
+
+    BESS_BASE = {
+        "Id": 42,
+        "EinheitName": "Test Battery",
+        "EnergietraegerId": 2496,
+        "EnergietraegerName": "Speicher",
+        "Bruttoleistung": 1000.0,
+        "Nettonennleistung": 1000.0,
+        "NutzbareSpeicherkapazitaet": 2000.0,
+        "InbetriebnahmeDatum": "/Date(1577836800000)/",   # 2020-01-01 UTC
+        "GeplantesInbetriebsnahmeDatum": None,
+        "EndgueltigeStilllegungDatum": None,
+        "Stromspeichertechnologie": 524,
+        "StromspeichertechnologieBezeichnung": "Batterie",
+        "Batterietechnologie": 727,
+        "VollTeilEinspeisungBezeichnung": "Volleinspeisung",
+        "BetriebsStatusName": "In Betrieb",
+        "SpannungsebenenNamen": "Mittelspannung",
+        "Laengengrad": 13.4,
+        "Breitengrad": 52.5,
+        "Plz": "10115",
+        "Gemeinde": "Testgemeinde",
+        "Landkreis": "Test-Kreis",
+        "Bundesland": "Berlin",
+        "AnlagenbetreiberName": "Test Battery GmbH",
+        "AnlagenbetreiberPersonenArt": 517,
+    }
+
+    def test_skips_non_bess_records(self):
+        e = dict(self.BESS_BASE)
+        e["EnergietraegerId"] = 2497  # Wind
+        assert mp.BatteryUnit.from_json(e) is None
+
+    def test_round_trip(self):
+        u = mp.BatteryUnit.from_json(dict(self.BESS_BASE))
+        assert u is not None
+        assert u.id == 42
+        assert u.power_kw == 1000.0
+        assert u.energy_kwh == 2000.0
+        assert u.storage_tech == "Batterie"
+        assert u.battery_tech_code == 727
+        assert u.feed_in_mode == "Volleinspeisung"
+        assert u.status == "In Betrieb"
+        assert u.voltage_level == "Mittelspannung"
+        assert u.landkreis == "Test-Kreis"
+        assert u.bundesland == "Berlin"
+        assert u.is_private is False
+
+    def test_planned_only_record(self):
+        e = dict(self.BESS_BASE)
+        e["InbetriebnahmeDatum"] = None
+        e["GeplantesInbetriebsnahmeDatum"] = "/Date(1820000000000)/"
+        u = mp.BatteryUnit.from_json(e)
+        assert u.install_date is None
+        assert u.planned_date is not None
+
+    def test_private_owner_flag(self):
+        e = dict(self.BESS_BASE)
+        e["AnlagenbetreiberPersonenArt"] = 518
+        u = mp.BatteryUnit.from_json(e)
+        assert u.is_private is True
+
+    def test_missing_capacity_defaults_to_zero(self):
+        e = dict(self.BESS_BASE)
+        e["NutzbareSpeicherkapazitaet"] = None
+        e["Bruttoleistung"] = None
+        u = mp.BatteryUnit.from_json(e)
+        assert u.power_kw == 0.0
+        assert u.energy_kwh == 0.0
+
+
 class TestCoreFields:
     def test_round_trip(self):
         pp = mp.PowerPlant.from_json(make_entry())

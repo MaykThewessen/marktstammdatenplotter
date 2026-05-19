@@ -11,9 +11,13 @@ __pycache__/
 # Marimo
 __marimo__/
 
-# Per-frame PNG dumps (regenerable from notebooks)
+# Per-frame raster dumps (regenerable from notebooks)
 fig/frames/
 fig/frames-pv/
+fig/frames-bess/
+
+# BESS scrape (heavy, regenerable)
+data-bess/
 
 # Scrape outputs / OSM artifacts (regenerable)
 data-*.json
