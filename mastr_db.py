@@ -225,15 +225,31 @@ def load_for_pipeline(tech: str, db_path: Path = DB_PATH) -> pd.DataFrame:
         LEFT JOIN market_actors m ON m.MastrNummer = e.AnlagenbetreiberMastrNummer
         """
     else:  # bess
+        # NutzbareSpeicherkapazitaet sits in `storage_units` (one-to-one with
+        # storage_extended via VerknuepfteEinheit), NOT directly in
+        # storage_extended where the column is always NULL. Skip the JOIN
+        # gracefully if storage_units is empty (e.g. fresh download of only
+        # `data=['storage']`).
+        has_storage_units = (
+            pd.read_sql("SELECT COUNT(*) AS n FROM storage_units", con=eng).iloc[0, 0] > 0
+        )
+        if has_storage_units:
+            energy_select  = "su.NutzbareSpeicherkapazitaet AS usable_capacity_kwh"
+            energy_join    = ("LEFT JOIN storage_units su "
+                              "ON su.VerknuepfteEinheit = e.EinheitMastrNummer")
+        else:
+            energy_select  = "NULL AS usable_capacity_kwh"
+            energy_join    = ""
         sql = f"""
         SELECT
             {common},
-            e.NutzbareSpeicherkapazitaet  AS usable_capacity_kwh,
+            {energy_select},
             e.GeplantesInbetriebnahmedatum AS planned_commissioning_date,
             e.Technologie                  AS storage_technology,
             m.Firmenname                   AS owner_name
         FROM storage_extended e
         LEFT JOIN market_actors m ON m.MastrNummer = e.AnlagenbetreiberMastrNummer
+        {energy_join}
         """
 
     df = pd.read_sql(sql, con=eng, parse_dates=list(_PIPELINE_DATE_COLS))

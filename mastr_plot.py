@@ -109,27 +109,33 @@ def _synthetic_records(n_pv: int = 4000, n_wind: int = 600, seed: int = 42) -> p
 
 
 def load_records(data_dir: Path | None = None, demo_if_missing: bool = True,
-                 prefer_bulk: bool = True) -> tuple[pd.DataFrame, bool]:
+                 prefer_bulk: bool = True,
+                 source: str = "auto") -> tuple[pd.DataFrame, bool]:
     """Load records as a DataFrame.
 
     Returns (df, is_demo). When `is_demo` is True the rows are synthetic.
 
-    If `prefer_bulk=True` (default) and an open-MaStR bulk parquet dump is
-    on disk (BNetzA_MaStR/solar.parquet + wind.parquet), it is preferred
-    over the JSON-API scrape — covers the full ~ 5 M PV registry instead
-    of the top-200 k slice. Falls back to the JSON scrape automatically.
+    If `prefer_bulk=True` (default) and a bulk snapshot is available — either
+    the open-mastr SQLite at data/mastr/open-mastr.db (preferred) or the
+    Zenodo parquet dir BNetzA_MaStR/ — it is loaded instead of the JSON-API
+    scrape (which covers only the top-200 k slice). Falls back to the JSON
+    scrape if neither bulk source is present.
+
+    `source` is forwarded to load_from_bulk: "auto" picks SQLite when
+    available, "sqlite" forces it, "zenodo" forces the legacy parquet path.
 
     If `data_dir` is None, all default dirs that hold *.json scrapes are merged
     so a single DataFrame contains wind + PV when both have been scraped.
     """
-    bulk_dir = find_bulk_dir() if (prefer_bulk and data_dir is None) else None
-    if bulk_dir is not None:
+    if prefer_bulk and data_dir is None:
         frames = []
         for tech in ("pv", "wind"):
-            path = bulk_dir / {"pv": "solar.parquet", "wind": "wind.parquet"}[tech]
-            if path.exists():
-                df, _ = load_from_bulk(tech, bulk_dir)
+            try:
+                df, _ = load_from_bulk(tech, source=source)
                 frames.append(df)
+            except FileNotFoundError:
+                # No bulk source for this tech — fall through to JSON scrape.
+                continue
         if frames:
             df = pd.concat(frames, ignore_index=True)
             # Drop tz so downstream snap-date comparisons work.
@@ -234,7 +240,8 @@ def bess_sector_series(energy_kwh) -> pd.Series:
 
 
 def load_bess(data_dir: Path | None = None, demo_if_missing: bool = False,
-              prefer_bulk: bool = True) -> tuple[pd.DataFrame, bool]:
+              prefer_bulk: bool = True,
+              source: str = "auto") -> tuple[pd.DataFrame, bool]:
     """Load BESS records as a tidy DataFrame.
 
     Returns (df, is_demo). With demo_if_missing=False (default) a missing
@@ -242,14 +249,17 @@ def load_bess(data_dir: Path | None = None, demo_if_missing: bool = False,
     is not implemented yet because the per-Kreis names are pre-joined in
     the source JSON and the demo data wouldn't reflect that.
 
-    If `prefer_bulk=True` (default) and BNetzA_MaStR/storage.parquet is on
-    disk, that 1.75 M-row full registry slice is used instead of the
-    top-200k JSON scrape.
+    If `prefer_bulk=True` (default) a bulk snapshot is preferred — either
+    the open-mastr SQLite at data/mastr/open-mastr.db (`source="auto"`,
+    default) or BNetzA_MaStR/storage.parquet. Falls back to the JSON scrape
+    if neither bulk source is present.
     """
-    bulk_dir = find_bulk_dir() if (prefer_bulk and data_dir is None) else None
-    if bulk_dir is not None and (bulk_dir / "storage.parquet").exists():
-        df, _ = load_from_bulk("bess", bulk_dir)
-        return df, False
+    if prefer_bulk and data_dir is None:
+        try:
+            df, _ = load_from_bulk("bess", source=source)
+            return df, False
+        except FileNotFoundError:
+            pass  # fall through to JSON scrape below
 
     candidates = [
         REPO_ROOT / "data-bess",
