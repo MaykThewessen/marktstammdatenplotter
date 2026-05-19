@@ -19,6 +19,12 @@ All notable changes to this project. Follows
 - Renamed: `wind-2005-2025.gif` → `wind-2005-may2026.gif`,
   `pv-2005-2025.gif` → `pv-2005-may2026.gif`. README + docs/index.html
   + OpenGraph meta tags updated.
+- Snapshot date bumped from `2025-01-01` to `2026-05-01` across all
+  three derived-data scripts (render_samples, build_kreise_json,
+  build_downloads). Density choropleths, top-Kreise table, downloads,
+  per-Bundesland chart and the inline doc-site captions now all reflect
+  the same point-in-time. New active-flag column in the parquet/CSV
+  download renamed `active_2025_01_01` → `active_at_snap`.
 
 ## [0.5.0] — 2026-05-18
 

@@ -16,7 +16,7 @@ import mastr_plot  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "docs" / "assets" / "kreise.json"
-SNAP = pd.Timestamp("2025-01-01")
+SNAP = pd.Timestamp("2026-05-01")
 
 
 def per_kreis(df_sub, units, label):

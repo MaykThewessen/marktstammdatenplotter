@@ -28,7 +28,7 @@ import mastr_plot  # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 FIG = ROOT / "fig"
 DOCS = ROOT / "docs" / "assets"
-SNAP = pd.Timestamp("2025-01-01")
+SNAP = pd.Timestamp("2026-05-01")  # Aligned with the final frame of the animation GIFs
 
 
 def render_map(records, units, energy_type, title_prefix, cmap, out_name):

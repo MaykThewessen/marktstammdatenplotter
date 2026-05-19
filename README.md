@@ -87,8 +87,9 @@ balcony solar (the long tail of 6 M plants below 200 kW) is excluded.
 | ![PV map — top 50k](fig/sample-pv-map.svg) | ![Wind map](fig/sample-wind-map.svg) |
 | ![PV growth — top 50k](fig/sample-pv-growth.svg) | ![Wind growth](fig/sample-wind-growth.svg) |
 
-> **2025-01-01 snapshot · real data:** 31 404 wind turbines active, 63 GW total
-> installed. PV map covers the 50 000 plants ≥ 200 kW — 68.8 GW combined.
+> **2026-05-01 snapshot · real data:** 32 107 wind turbines active, 79.7 GW
+> total installed. PV map covers ~195 591 active plants ≥ 49 kW — 72.8 GW
+> combined. Offshore: 1 732 turbines · 10.4 GW (Nordsee + Ostsee).
 
 ### Installed capacity by Bundesland
 
@@ -111,7 +112,7 @@ and Ørsted at the top.
 
 ![Offshore wind farms](fig/sample-offshore-windparks.svg)
 
-1 637 turbines / 9.2 GW offshore — 7.4 GW Nordsee + 1.8 GW Ostsee. MaStR
+1 732 turbines / 10.4 GW offshore — 8.6 GW Nordsee + 1.8 GW Ostsee. MaStR
 anonymises offshore coordinates, so this chart groups by operator instead of
 mapping individual turbines.
 
@@ -120,7 +121,7 @@ mapping individual turbines.
 ![Energy mix](fig/sample-energy-mix.svg)
 
 All registered electricity-generating units in this scrape, by `Energietraeger`.
-Coal (Braunkohle + Steinkohle, 31 GW) still rivals utility-scale PV (58 GW).
+Coal (Braunkohle + Steinkohle, 31 GW) is now decisively below utility-scale PV (73 GW).
 Erdgas (36 GW) carries most of the peaking load.
 
 ### PV orientation

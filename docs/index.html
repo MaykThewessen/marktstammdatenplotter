@@ -358,7 +358,7 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
 
         <figure>
           <object type="image/svg+xml" data="assets/sample-wind-map.svg" aria-label="Wind choropleth (real data)"></object>
-          <figcaption>Figure 5 — Installed wind capacity per Kreis, 2025-01-01 (31 404 turbines, 63 GW total).</figcaption>
+          <figcaption>Figure 5 — Installed wind capacity per Kreis, 2026-05-01 (32 107 turbines, 79.7 GW total).</figcaption>
         </figure>
 
         <figure>
@@ -379,7 +379,7 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
         <h3>Installed capacity by Bundesland</h3>
         <figure>
           <object type="image/svg+xml" data="assets/sample-by-bundesland.svg" aria-label="Capacity by Bundesland"></object>
-          <figcaption>Figure 9 — Wind + PV (≥ 200 kW) per state, snapshot 2025-01-01. Niedersachsen leads wind (12.7 GW); Bayern leads PV (12.0 GW).</figcaption>
+          <figcaption>Figure 9 — Wind + PV (≥ 200 kW) per state, snapshot 2026-05-01. Niedersachsen leads wind (12.7 GW); Bayern leads PV (12.0 GW).</figcaption>
         </figure>
 
         <h3>21 years of wind growth + YTD 2026</h3>
@@ -391,7 +391,7 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
         <h3>21 years of PV growth + YTD 2026</h3>
         <figure>
           <img src="assets/pv-2005-may2026.gif" alt="PV capacity 2005 to May 2026 animation" style="max-width:100%;border:1px solid var(--rtd-border);border-radius:4px;background:#fff;">
-          <figcaption>Figure 11 — Yearly frames of installed PV capacity per Kreis, 2005 → 2025, plus a final May-2026 YTD snapshot. Covers the 200 000 largest plants (≥ 49 kW, ≈ 58 GW). Rooftop / balcony long tail under 49 kW is excluded — capturing it would need 24 GB of JSON.</figcaption>
+          <figcaption>Figure 11 — Yearly frames of installed PV capacity per Kreis, 2005 → 2025, plus a final May-2026 YTD snapshot. Covers the 200 000 largest plants (≥ 49 kW, ≈ 73 GW). Rooftop / balcony long tail under 49 kW is excluded — capturing it would need 24 GB of JSON.</figcaption>
         </figure>
       </section>
 
@@ -399,14 +399,14 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
         <h2>Energy-type mix</h2>
         <p>
           National installed capacity per <code>Energietraeger</code>,
-          snapshot 2025-01-01. Numbers reflect this scrape (Wind: full
+          snapshot 2026-05-01. Numbers reflect this scrape (Wind: full
           registry; PV: top 200 k by capacity; everything else: full
           non-PV slice). True PV total is ~98 GW; this chart shows the
-          58 GW captured by the ≥ 49 kW slice.
+          73 GW captured by the ≥ 49 kW slice.
         </p>
         <figure>
           <object type="image/svg+xml" data="assets/sample-energy-mix.svg" aria-label="Energy-type mix"></object>
-          <figcaption>Figure 14 — MaStR energy-type mix, installed capacity at 2025-01-01.</figcaption>
+          <figcaption>Figure 14 — MaStR energy-type mix, installed capacity at 2026-05-01.</figcaption>
         </figure>
       </section>
 
@@ -488,7 +488,7 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
         </p>
         <figure>
           <object type="image/svg+xml" data="assets/sample-wind-density.svg" aria-label="Wind density choropleth"></object>
-          <figcaption>Figure 18 — Wind capacity density per Kreis (MW per km²), snapshot 2025-01-01.</figcaption>
+          <figcaption>Figure 18 — Wind capacity density per Kreis (MW per km²), snapshot 2026-05-01.</figcaption>
         </figure>
         <figure>
           <object type="image/svg+xml" data="assets/sample-pv-density.svg" aria-label="PV density choropleth"></object>
@@ -500,7 +500,7 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
         <h2>Largest individual plants</h2>
         <p>
           Top 10 by single-unit capacity (<code>Bruttoleistung</code>) in this
-          scrape, snapshot 2025-01-01. Wind list shows the new
+          scrape, snapshot 2026-05-01. Wind list shows the new
           <b>Nordseecluster</b> + Iberdrola <b>Windanker</b> 15 MW turbines —
           all offshore, so Kreis is empty. PV list captures every solar park
           ≥ 100 MW: <b>Schafhöfen</b> (200 MW, Bayern), <b>SILUX 1/2/4</b> +
@@ -570,7 +570,7 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
         <h2>Top operators</h2>
         <p>
           Top 30 owners by combined wind + utility-scale PV capacity, snapshot
-          2025-01-01. Names are normalised (legal-form suffixes stripped) but
+          2026-05-01. Names are normalised (legal-form suffixes stripped) but
           not consolidated across parent companies — most offshore wind farms
           appear as standalone project vehicles, which is why the top of the
           chart is dominated by single-farm LLCs rather than utilities.
@@ -584,7 +584,7 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
       <section id="offshore">
         <h2>Offshore wind</h2>
         <p>
-          Germany's offshore wind fleet at 2025-01-01: 1 637 turbines, 9.2 GW
+          Germany's offshore wind fleet at 2026-05-01: 1 732 turbines, 10.4 GW
           total — 7.4 GW in the Nordsee, 1.8 GW in the Ostsee. Coordinates in
           MaStR are anonymised for offshore (<code>StandortAnonymisiert</code>
           starts with "Nordsee" or "Ostsee"), so we group by operator
@@ -600,7 +600,7 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
         <h2>Top Kreise by installed capacity</h2>
         <p>
           Sortable, filterable table of all 434 German Kreise (snapshot
-          2025-01-01), driven by the same MaStR scrape behind the maps above.
+          2026-05-01), driven by the same MaStR scrape behind the maps above.
           Click any column to sort; type in the filter box to search by Kreis
           name or Bundesland. <em>PV</em> column uses the top-50 000 utility-scale
           plants (≥ 200 kW); <em>Wind #</em> and <em>PV #</em> are turbine /

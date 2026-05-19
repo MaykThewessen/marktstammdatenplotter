@@ -25,7 +25,7 @@ import mastr_plot  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "docs" / "data"
-SNAP = pd.Timestamp("2025-01-01")
+SNAP = pd.Timestamp("2026-05-01")
 
 KEEP_COLS = [
     "id", "energy_type", "power", "install_date", "removal_date",
@@ -55,7 +55,7 @@ def build_snapshot(df, units):
     joined = joined.loc[~joined.index.duplicated(keep="first")]
     out["kreis"] = joined["name"].reindex(out.reset_index(drop=True).index).astype("string").values
     out["bundesland"] = joined["bundesland"].reindex(out.reset_index(drop=True).index).astype("string").values
-    out["active_2025_01_01"] = (
+    out["active_at_snap"] = (
         (out["install_date"].isna() | (out["install_date"] <= SNAP))
         & (out["removal_date"].isna() | (out["removal_date"] > SNAP))
     )
@@ -64,7 +64,7 @@ def build_snapshot(df, units):
 
 def build_summary(out):
     return (
-        out[out["active_2025_01_01"]]
+        out[out["active_at_snap"]]
         .groupby(["kreis", "bundesland", "energy_type"])
         .agg(plants=("id", "size"),
              mw=("power_kw", lambda s: round(s.sum() / 1e3, 2)))
