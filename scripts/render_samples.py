@@ -265,6 +265,7 @@ def render_yoy_additions(records, units, out_name, year: int = 2024):
         legend_kwds={"label": f"New capacity {year} [MW]", "shrink": 0.6},
         missing_kwds={"color": "#eeeeee"},
     )
+    geo.dissolve().boundary.plot(ax=ax, color="black", linewidth=0.8, zorder=5)
     ax.set_axis_off()
     ax.set_title(
         f"Capacity added during {year} per Kreis\n"
@@ -298,6 +299,7 @@ def render_density_map(records, units, energy_type, cmap, out_name, title_prefix
         legend_kwds={"label": "Capacity density [MW/km²]", "shrink": 0.6},
         missing_kwds={"color": "#eeeeee"},
     )
+    agg.dissolve().boundary.plot(ax=ax, color="black", linewidth=0.8, zorder=5)
     ax.set_axis_off()
     ax.set_title(
         f"{title_prefix} per km² — {SNAP.date()}\n"
@@ -772,6 +774,7 @@ def render_psh_charts(psh_df, units, out_map: str, out_summary: str, out_top: st
         legend_kwds={"label": "PSH energy [GWh]", "shrink": 0.6},
         missing_kwds={"color": "#eeeeee"},
     )
+    agg.dissolve().boundary.plot(ax=ax, color="black", linewidth=0.8, zorder=5)
     ax.set_axis_off()
     ax.set_title(
         f"Pumped-hydro storage (PSH) energy per Kreis — {snap.date()}\n"
@@ -890,6 +893,7 @@ def render_bess_charts(bess_df, units, out_power: str, out_energy: str,
         legend_kwds={"label": "BESS power [GW]", "shrink": 0.6},
         missing_kwds={"color": "#eeeeee"},
     )
+    agg.dissolve().boundary.plot(ax=ax, color="black", linewidth=0.8, zorder=5)
     ax.set_axis_off()
     ax.set_title(
         f"Battery storage power per Kreis — {snap.date()}\n"
@@ -914,6 +918,7 @@ def render_bess_charts(bess_df, units, out_power: str, out_energy: str,
         legend_kwds={"label": "BESS energy [GWh]", "shrink": 0.6},
         missing_kwds={"color": "#eeeeee"},
     )
+    agg.dissolve().boundary.plot(ax=ax, color="black", linewidth=0.8, zorder=5)
     ax.set_axis_off()
     ax.set_title(
         f"Battery storage energy per Kreis — {snap.date()}\n"
