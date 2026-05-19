@@ -22,7 +22,10 @@ import pandas as pd
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 
-DB_PATH = Path.home() / ".open-MaStR" / "data" / "sqlite" / "open-mastr.db"
+_REPO_DB = Path(__file__).resolve().parent / "data" / "mastr" / "open-mastr.db"
+_HOME_DB = Path.home() / ".open-MaStR" / "data" / "sqlite" / "open-mastr.db"
+# Prefer in-repo copy when present (gitignored); fall back to open-mastr default.
+DB_PATH = _REPO_DB if _REPO_DB.exists() else _HOME_DB
 
 EXTENDED_TABLES = {
     "wind":    "wind_extended",

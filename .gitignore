@@ -45,3 +45,7 @@ germany_admin_levels_*.osm
 
 # Claude Code local config
 .claude/
+
+# open-mastr SQLite snapshot (6+ GB, regenerable via `pixi run db-mastr-core`).
+# Symlinked from ~/.open-MaStR/data/sqlite/open-mastr.db so refresh works in place.
+data/mastr/

@@ -31,7 +31,9 @@ Two MaStR fetch paths live side by side:
 
 1. **`open-mastr` bulk XML → SQLite** (preferred for whole-dataset work).
    Refresh via `pixi run db-mastr-core` (wind+solar+storage) or `db-mastr-all`.
-   DB lands at `~/.open-MaStR/data/sqlite/open-mastr.db`. Load with
+   DB lives at `data/mastr/open-mastr.db` in the repo (~6.3 GB, gitignored).
+   `~/.open-MaStR/data/sqlite/open-mastr.db` is a symlink to that path so
+   open-mastr's default writer still refreshes the in-repo copy. Load with
    `mastr_db.load_geo("wind")`. Enum codes already decoded — no `parser.py`
    mapping needed.
 2. **Custom JSON scrape** (`fetch_mastr.py` / `parser.py`) — incremental
