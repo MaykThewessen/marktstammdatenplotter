@@ -44,6 +44,18 @@ jobs:
       - name: Resolve env
         run: pixi install
 
+      - name: Refresh open-mastr SQLite snapshot (wind, solar, storage, storage_units, market)
+        # ~6 GB DB + 2 GB ZIP fit comfortably on the runner; drop the ZIP after
+        # parse to keep disk pressure off the subsequent render steps.
+        # SQLITE_DATABASE_PATH (read by open-mastr/helpers.py:50) directs the
+        # write to the repo path so mastr_db.DB_PATH resolves to _REPO_DB.
+        env:
+          SQLITE_DATABASE_PATH: ${{ github.workspace }}/data/mastr/open-mastr.db
+        run: |
+          mkdir -p data/mastr
+          pixi run db-mastr-core
+          rm -f ~/.open-MaStR/data/xml_download/*.zip || true
+
       - name: Fetch Kreis polygons
         run: pixi run fetch-kreise
 

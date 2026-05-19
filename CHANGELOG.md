@@ -7,6 +7,37 @@ All notable changes to this project. Follows
 ## [Unreleased]
 
 ### Added
+- **Daily-fresh open-mastr SQLite snapshot as primary data source.**
+  `pixi run db-mastr-core` populates `data/mastr/open-mastr.db` (~6 GB,
+  gitignored) with wind, solar, storage, storage_units, and market_actors
+  tables via the open-mastr bulk XML → SQLite pipeline. The home-default
+  `~/.open-MaStR/data/sqlite/open-mastr.db` is symlinked to the repo file so
+  open-mastr refresh writes in place.
+- `mastr_db.py` — thin SQLAlchemy loader exposing `load()`, `load_geo()`,
+  `load_for_pipeline()`, `count()`, `list_tables()`. The
+  `load_for_pipeline(tech)` adapter returns a DataFrame shaped to the same
+  Zenodo-parquet column contract that `mastr_plot.load_from_bulk` consumes,
+  so the downstream rename + decoration block applies unchanged.
+- `mastr_plot.load_from_bulk(tech, source="auto")` — new `source` parameter
+  selects between open-mastr SQLite, the legacy Zenodo parquet directory,
+  or auto-detection. `load_records()` and `load_bess()` inherit the same
+  switch, so notebooks transparently use SQLite when present.
+- `tests/test_open_mastr_parity.py` — 19 integration tests covering schema
+  contract, row-count floors, capacity bounds, enum translation, and the
+  strict-mode raise when `market_actors` is empty.
+- New pixi tasks: `db-mastr-wind`, `db-mastr-solar`, `db-mastr-storage`,
+  `db-mastr-storage-units`, `db-mastr-market`, `db-mastr-core`, `db-mastr-all`.
+- Weekly CI workflow now refreshes the SQLite snapshot before rendering
+  (`SQLITE_DATABASE_PATH` points open-mastr at the repo path; ZIP cleaned up
+  post-parse to free disk).
+
+### Changed
+- `scripts/build_full_bess.py` rewritten as a thin
+  `mastr_db.load_for_pipeline("bess") → parquet` pass; the Zenodo-base
+  plus JSON-API delta merge is no longer needed (SQLite is daily-fresh).
+  Output path and column schema unchanged for downstream compatibility.
+
+### Added (legacy Zenodo path — retained as fallback)
 - **Full-registry bulk loader (open-MaStR Zenodo).** New
   `mastr_plot.load_from_bulk(tech)` reads pre-converted parquet
   snapshots (`solar.parquet`, `wind.parquet`, `storage.parquet`)

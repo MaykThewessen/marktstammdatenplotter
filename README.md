@@ -36,10 +36,25 @@ in kW, geographic coordinates, and a pile of enum-encoded metadata.
 
 This repo:
 
-1. **scrapes** the MaStR public JSON API (`parser.py` decodes the rows),
+1. **loads** the registry — primary path is the daily-fresh
+   [open-mastr](https://open-mastr.readthedocs.io) bulk SQLite snapshot
+   (`pixi run db-mastr-core` → `data/mastr/open-mastr.db`, ~6 GB,
+   gitignored); fallback paths are the Zenodo parquet dump under
+   `BNetzA_MaStR/` and the legacy JSON-API scrape (`parser.py`),
 2. **joins** turbines to German county polygons extracted from OSM,
 3. **renders** one choropleth PNG per month from the year 2000 to today, and
 4. **assembles** the frames into an animated GIF with `ffmpeg`.
+
+### Data sources
+
+| Source | Refresh cadence | Coverage | Pixi task |
+|---|---|---|---|
+| open-mastr SQLite (default) | daily, full registry | 6.1 M PV + 42 k wind + 2.5 M storage | `pixi run db-mastr-core` |
+| Zenodo parquet | snapshot @ 2025-02-09 | full registry at cutoff | manual download to `BNetzA_MaStR/` |
+| MaStR JSON API | ad-hoc, top-N only | top 200 k by power | `pixi run scrape-non-pv`, `scrape-bess`, etc. |
+
+Loaders auto-detect the strongest source available; explicit selection via
+`mastr_plot.load_from_bulk(tech, source="sqlite" \| "zenodo" \| "auto")`.
 
 ### Pipeline at a glance
 
