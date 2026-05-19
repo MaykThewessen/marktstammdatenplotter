@@ -87,7 +87,7 @@ def render_frames(records, units, cfg) -> tuple[int, Path]:
             agg, snap, title, bins=bins, cmap=cfg["cmap"],
         )
         fig.savefig(frames / f"{cfg['frame_prefix']}-{idx:03d}.png",
-                    dpi=110, bbox_inches="tight")
+                    dpi=150, bbox_inches="tight")
         plt.close(fig)
         idx += 1
 
@@ -104,7 +104,7 @@ def assemble_gif(frames: Path, cfg):
     cmd = [
         "ffmpeg", "-y", "-framerate", "3",
         "-i", str(frames / f"{cfg['frame_prefix']}-%03d.png"),
-        "-vf", "scale=-1:900:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse=dither=bayer",
+        "-vf", "scale=-1:1200:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=192[p];[s1][p]paletteuse=dither=bayer",
         "-loop", "0", str(out_gif),
     ]
     subprocess.run(cmd, check=True)
