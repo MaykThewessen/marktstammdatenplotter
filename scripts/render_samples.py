@@ -1540,9 +1540,11 @@ def main():
         unit="GWp",
     )
 
-    # BESS slice lives in its own data-bess/ dir; render only if present.
+    # Prefer the open-mastr SQLite snapshot (~2.5 M storage units) over the
+    # 200 k JSON-scrape slice. Falls back to JSON-scrape if neither SQLite
+    # nor a BESS parquet is present.
     try:
-        bess_df, _ = mastr_plot.load_bess(prefer_bulk=False)
+        bess_df, _ = mastr_plot.load_bess()
     except FileNotFoundError:
         print("BESS scrape not present — skipping BESS / PSH charts.")
     else:
