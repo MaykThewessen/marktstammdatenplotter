@@ -69,11 +69,12 @@
         <li><a href="#pv-by-type">PV by installation type</a></li>
         <li><a href="#pv-orientation">PV orientation</a></li>
         <li><a href="#wind-age">Wind fleet age</a></li>
-        <li><a href="#bess">Battery + storage (BESS)</a>
+        <li><a href="#bess">Battery storage (BESS)</a>
           <ul>
             <li><a href="#bess">3-sector split (HSS/CSS/LSS)</a></li>
           </ul>
         </li>
+        <li><a href="#psh">Pumped-hydro storage (PSH)</a></li>
         <li><a href="#density">Capacity density (MW/km²)</a></li>
         <li><a href="#yoy-additions">2024 additions</a></li>
         <li><a href="#largest-plants">Largest individual plants</a></li>
@@ -523,13 +524,20 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
       </section>
 
       <section id="bess">
-        <h2>Battery + electricity storage (BESS)</h2>
+        <h2>Battery storage (BESS)</h2>
         <p>
           The German electricity registry tracks storage units under
           <code>Energieträger=2496</code> (Speicher) — a separate slice from
-          generation. Scraped the top 200 000 units by <code>Bruttoleistung</code>;
-          that captures everything from the 1 GW <b>LEAG GigaBattery
-          Jänschwalde</b> (planned 2028) down to ~10 kW home batteries.
+          generation. The numbers below cover <b>batteries only</b>
+          (<code>Stromspeichertechnologie = "Batterie"</code>). Pumped-hydro
+          (PSH) is reported in its <a href="#psh">own section</a> below.
+          Scraped the top 200 000 units by <code>Bruttoleistung</code>;
+          that captures everything from grid-scale Li-ion projects down to
+          ~10 kW home batteries.
+        </p>
+        <p>
+          <b>Snapshot 2026-05-01 (batteries only, active):</b>
+          193 599 units · <b>6.49 GW · 9.4 GWh</b>.
         </p>
 
         <div class="admonition note">
@@ -572,29 +580,29 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
           <figcaption>Figure 24 — Duration distribution per sector (Batterie only). HSS clusters at ~1 h (paired to PV self-consumption); CSS at 1.5-2 h; LSS spreads across 1-4 h.</figcaption>
         </figure>
         <p>
-          Snapshot 2026-05-01 (commissioned only):
-          <b>193 678 units</b> · <b>7.86 GW</b> · <b>98.9 GWh</b>.
-          Add the 4 193 planned-but-not-yet-commissioned units and the
-          pipeline reaches <b>25 GW / 2 565 GWh</b> by ~ 2028.
+          Battery sub-sector breakdown (active, 2026-05-01):
         </p>
+        <ul>
+          <li><b>HSS</b> &lt; 30 kWh: 176 411 units · 2.47 GW · 2.54 GWh</li>
+          <li><b>CSS</b> 30 kWh – 1 MWh: 16 655 units · 0.68 GW · 1.20 GWh</li>
+          <li><b>LSS</b> ≥ 1 MWh: 526 units · <b>3.34 GW · 5.65 GWh</b></li>
+        </ul>
         <p>
-          Power is split roughly 50/50 between Pumpspeicher (6.48 GW, 41 sites)
-          and Batterie (6.49 GW, 193 599 units), but <em>energy</em> is
-          Pumpspeicher-dominated by ~100× because hydro PSH has multi-hour
-          duration while Li-ion sits in the 1-2 h band.
+          Pipeline: another ~ 8 GW of LSS Li-ion under construction or
+          permitted (LEAG GigaBattery Jänschwalde 1 GW, Boxberg 400 MW,
+          ECO POWER 1–6 = 6 × 300 MW, Westfalen 538 MW…). Combined with
+          PSH the German storage stack reaches ~ 25 GW by ~ 2028.
         </p>
 
         <h3>Size-bin breakdown — GW + GWh per per-unit size class</h3>
         <p>
-          Where does the capacity actually sit when you sort by single-unit
-          power? Residential (10-100 kW) carries half the units but only
-          ~3 GW; the <b>100-1000 MW bin</b> — just 30 units — already accounts
-          for <b>6.2 GW + 765 GWh</b> thanks to Pumpspeicher. The "1 GW+" bin
-          stays empty for now (Jänschwalde 1 GW is still in Planung).
+          Battery-only view. Residential (10-100 kW) carries ~ 192 k units
+          but only 2.9 GW / 3.5 GWh. The MW-scale grid-services bins
+          (10-100 MW + 1-10 MW) carry most of the GW + GWh.
         </p>
         <figure>
           <object type="image/svg+xml" data="assets/sample-bess-by-size.svg" aria-label="BESS per-unit size-bin breakdown"></object>
-          <figcaption>Figure 25 — BESS installed power (left) and usable energy (right) per per-unit size-bin. Bin counts in parentheses.</figcaption>
+          <figcaption>Figure 25 — Battery installed power (left) and usable energy (right) per per-unit size-bin.</figcaption>
         </figure>
 
         <h3>BESS power per Kreis</h3>
@@ -606,7 +614,7 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
         <h3>BESS energy per Kreis</h3>
         <figure>
           <object type="image/svg+xml" data="assets/sample-bess-energy-map.svg" aria-label="BESS energy choropleth"></object>
-          <figcaption>Figure 26 — Battery storage energy capacity per Kreis (GWh). Pumpspeicher in Thüringen (Goldisthal, ~9.6 GWh × 4 PSS units) dominates.</figcaption>
+          <figcaption>Figure 26 — Battery storage energy capacity per Kreis (GWh) — batteries only, PSH split off into its own section.</figcaption>
         </figure>
 
         <h3>Duration distribution</h3>
@@ -615,16 +623,10 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
           <figcaption>Figure 27 — Capacity-weighted duration histogram (Batterie only). Bimodal: 1-h hybrid-PV cluster, 2-4 h grid-services cluster.</figcaption>
         </figure>
 
-        <h3>Storage technology mix</h3>
-        <figure>
-          <object type="image/svg+xml" data="assets/sample-bess-tech-mix.svg" aria-label="BESS tech mix"></object>
-          <figcaption>Figure 28 — Power (left) and usable energy capacity (right) split by storage technology.</figcaption>
-        </figure>
-
         <h3>Cumulative growth</h3>
         <figure>
           <object type="image/svg+xml" data="assets/sample-bess-growth.svg" aria-label="BESS cumulative growth"></object>
-          <figcaption>Figure 29 — Cumulative BESS power (purple) + energy (blue dashed) since 2010 (all-technologies aggregate).</figcaption>
+          <figcaption>Figure 28 — Cumulative battery power (purple) + energy (blue dashed) since 2010.</figcaption>
         </figure>
 
         <h3>21 years of battery + storage growth</h3>
@@ -642,6 +644,47 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
             <a href="assets/bess-2005-may2026.gif">.gif</a>.
           </figcaption>
         </figure>
+      </section>
+
+      <section id="psh">
+        <h2>Pumped-hydro storage (PSH)</h2>
+        <p>
+          PSH is reported separately from batteries everywhere serious
+          (battery-charts.de, BVES, EASE, EU SET-Plan) because it's a
+          fundamentally different technology — multi-decade lifecycle,
+          multi-hour duration, mechanical-hydro chemistry instead of
+          electrochemical. Lumping it with Li-ion BESS hides both stories.
+        </p>
+        <p>
+          <b>Snapshot 2026-05-01 (active):</b> 41 sites · <b>6.48 GW ·
+          927.5 GWh</b>. Median site duration ~ 8 h — orders of magnitude
+          longer than the 1-h Li-ion median. Goldisthal alone (4 PSS units
+          × 265 MW each / 9.64 GWh each) accounts for 1.06 GW + 38.5 GWh.
+        </p>
+
+        <h3>PSH energy per Kreis</h3>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-psh-map.svg" aria-label="PSH choropleth"></object>
+          <figcaption>Figure 31 — Pumped-hydro storage energy per Kreis. Thüringen + Bayern + Rheinland-Pfalz lead — these are mountain Kreise with the elevation differential PSH needs.</figcaption>
+        </figure>
+
+        <h3>Distribution + duration</h3>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-psh-summary.svg" aria-label="PSH per-state + duration"></object>
+          <figcaption>Figure 32 — PSH power (left) + energy (right) per Bundesland, plus duration histogram (far right). Median duration ~ 8 h — Li-ion sits at ~ 1 h for comparison.</figcaption>
+        </figure>
+
+        <h3>Top sites</h3>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-psh-top.svg" aria-label="PSH top sites"></object>
+          <figcaption>Figure 33 — Top 15 pumped-hydro sites by power. Annotation: installed energy in GWh + commissioning year.</figcaption>
+        </figure>
+
+        <p style="font-size:0.9rem;color:var(--rtd-muted)">
+          The "other electricity storage" tail (Wasserstoffspeicher 26 units,
+          Druckluft 10, Schwungrad 1) sums to 0.0 GW / 0.006 GWh combined —
+          pilot installations, not yet material.
+        </p>
       </section>
 
       <section id="density">

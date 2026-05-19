@@ -7,6 +7,27 @@ All notable changes to this project. Follows
 ## [Unreleased]
 
 ### Added
+- **Pumped-hydro storage (PSH) split out of BESS.** Following the
+  battery-charts.de / BVES / EASE / EU SET-Plan reporting convention,
+  PSH gets its own section + chart set (`sample-psh-map.svg`,
+  `sample-psh-summary.svg`, `sample-psh-top.svg`). Battery-only stats
+  in the BESS section now drop from 12.97 GW / 936.9 GWh combined to
+  the true Li-ion-and-friends number: **6.49 GW / 9.4 GWh**.
+- `mastr_plot.split_bess_storage()` returns three disjoint slices —
+  batteries, psh, other (Wasserstoff/Druckluft/Schwungrad pilots).
+
+### Changed
+- `render_bess_charts()` now expects the **batteries-only** slice. The
+  legacy multi-tech "tech-mix" subchart was dropped (post-split it'd be
+  a single bar) and `sample-bess-tech-mix.svg` removed.
+- Wind size-bin chart now aggregates **per-project** (`owner_name`
+  proxy) instead of per-turbine. Big windparks no longer disappear into
+  the 1-10 MW bin — the new bins show 100-1000 MW projects as a real
+  thing (offshore farms have one SPV per farm).
+- Size-bin bars no longer annotate the unit count above each bar — value
+  only.
+
+### Added
 - **Per-unit size-bin breakdown for Wind / PV / BESS.** Single shared
   axis of seven log-spaced bins (0-10 kW, 10-100 kW, 100 kW-1 MW,
   1-10 MW, 10-100 MW, 100-1000 MW, 1 GW+). BESS chart has two panels

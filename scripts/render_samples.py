@@ -495,18 +495,14 @@ def _size_bin_stats(df, power_col="power_kw", energy_col=None):
     return gw, gwh, n
 
 
-def _bar_with_labels(ax, values, color, ylabel, title, fmt="{:.2f}",
-                     count_series=None):
+def _bar_with_labels(ax, values, color, ylabel, title, fmt="{:.2f}"):
     bars = ax.bar(SIZE_BIN_LABELS, values, color=color,
                   edgecolor="#1e293b", linewidth=0.4)
     ymax = max(values.max(), 1e-9)
     for i, v in enumerate(values):
         if v <= 0:
             continue
-        label = fmt.format(v)
-        if count_series is not None:
-            label += f"\n({int(count_series.iloc[i]):,})"
-        ax.text(i, v + ymax * 0.02, label, ha="center", fontsize=8)
+        ax.text(i, v + ymax * 0.02, fmt.format(v), ha="center", fontsize=9)
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     ax.grid(axis="y", alpha=0.3)
@@ -529,7 +525,7 @@ def render_bess_by_size(bess_df, out_name: str):
     _bar_with_labels(axs[0], gw, purples,
                      "Installed power [GW]",
                      "BESS installed power by per-unit size-bin",
-                     fmt="{:.2f}", count_series=n)
+                     fmt="{:.2f}")
     _bar_with_labels(axs[1], gwh, purples,
                      "Usable energy [GWh]",
                      "BESS usable energy by per-unit size-bin",
@@ -546,8 +542,15 @@ def render_bess_by_size(bess_df, out_name: str):
 
 
 def render_generation_by_size(records, energy_type: str, palette: list[str],
-                              tech_label: str, noun: str, out_name: str):
-    """Single-panel GW per power-bin for Wind / PV."""
+                              tech_label: str, noun: str, out_name: str,
+                              aggregate_by: str | None = None):
+    """Single-panel GW per power-bin for Wind / PV.
+
+    `aggregate_by=None`: per-unit (per-turbine, per-plant) — default.
+    `aggregate_by="owner_name"`: collapse units that share an owner into
+      a single 'project' first, then bin by project power. Useful for
+      Wind where turbines from the same Windpark share an SPV owner.
+    """
     snap = SNAP
     sub = records[records["energy_type"] == energy_type]
     active = sub[
@@ -555,14 +558,36 @@ def render_generation_by_size(records, energy_type: str, palette: list[str],
         & (sub["removal_date"].isna() | (sub["removal_date"] > snap))
     ].copy()
     active = active.rename(columns={"power": "power_kw"})
-    gw, _, n = _size_bin_stats(active, "power_kw")
+
+    if aggregate_by:
+        # Drop rows with missing owner — they can't be grouped meaningfully.
+        active = active[active[aggregate_by].notna()
+                        & (active[aggregate_by].astype(str).str.strip() != "")]
+        agg = (active.groupby(aggregate_by, dropna=False)["power_kw"]
+                     .sum().reset_index())
+        unit_count = len(active)
+        project_count = len(agg)
+        scope_label = (
+            f"{project_count:,} projects (aggregated from {unit_count:,} "
+            f"{noun} sharing an owner) · {agg['power_kw'].sum() / 1e6:.1f} GW total"
+        )
+        binned_input = agg
+    else:
+        scope_label = (
+            f"{len(active):,} active {noun} · "
+            f"{active['power_kw'].sum() / 1e6:.1f} GW total"
+        )
+        binned_input = active
+
+    gw, _, _ = _size_bin_stats(binned_input, "power_kw")
 
     fig, ax = plt.subplots(figsize=(11, 4.5), dpi=120)
+    bin_basis = "per-project" if aggregate_by else "per-unit"
     _bar_with_labels(
         ax, gw, palette, "Installed power [GW]",
-        f"{tech_label} installed power by per-unit size-bin — {snap.date()}\n"
-        f"({len(active):,} active {noun} · {gw.sum():.1f} GW total)",
-        fmt="{:.2f}", count_series=n,
+        f"{tech_label} installed power by {bin_basis} size-bin — {snap.date()}\n"
+        f"({scope_label})",
+        fmt="{:.2f}",
     )
     fig.tight_layout()
     for d in (FIG, DOCS):
@@ -697,9 +722,136 @@ def render_bess_sector_charts(bess_df, out_summary: str, out_growth: str,
     plt.close(fig)
 
 
+def render_psh_charts(psh_df, units, out_map: str, out_summary: str, out_top: str):
+    """Pumped-hydro storage: map + summary stats + top-N table.
+
+    PSH is reported separately from batteries everywhere serious
+    (battery-charts.de, BVES, EASE, EU SET-Plan) because it's a
+    different technology with a different lifecycle and different
+    grid-services profile.
+    """
+    import matplotlib.colors as mcolors
+
+    snap = SNAP
+    active = psh_df[
+        (psh_df["install_date"] <= snap)
+        & (psh_df["removal_date"].isna() | (psh_df["removal_date"] > snap))
+    ].copy()
+    active_gw = active["power_kw"].sum() / 1e6
+    active_gwh = active["energy_kwh"].sum() / 1e6
+
+    # -- 1. Choropleth (energy per Kreis — PSH is GWh-heavy) ----------------
+    agg, _ = mastr_plot.aggregate_bess_by_unit(psh_df, units, snap.date())
+    pos = agg["energy_gwh"][agg["energy_gwh"] > 0].to_numpy()
+    bins = mastr_plot.jenks_bins(pos, k=min(6, max(2, len(pos) - 1)))
+    if len(bins) < 2:
+        bins = [0.0, max(1.0, float(pos.max() or 1.0))]
+    norm = mcolors.BoundaryNorm(bins, ncolors=256)
+    fig, ax = plt.subplots(figsize=(9, 11), dpi=120)
+    agg.plot(
+        column="energy_gwh", ax=ax, cmap="GnBu", norm=norm,
+        edgecolor="white", linewidth=0.3, legend=True,
+        legend_kwds={"label": "PSH energy [GWh]", "shrink": 0.6},
+        missing_kwds={"color": "#eeeeee"},
+    )
+    ax.set_axis_off()
+    ax.set_title(
+        f"Pumped-hydro storage (PSH) energy per Kreis — {snap.date()}\n"
+        f"{len(active):,} sites · {active_gw:.2f} GW · {active_gwh:.1f} GWh "
+        f"(roughly 100× the energy density of battery storage)",
+        fontsize=12,
+    )
+    fig.tight_layout()
+    for d in (FIG, DOCS):
+        fig.savefig(d / out_map, format="svg", bbox_inches="tight")
+    plt.close(fig)
+
+    # -- 2. Summary bars (power + energy + duration) -------------------------
+    duration = active.copy()
+    duration["duration_h"] = duration["energy_kwh"] / duration["power_kw"].replace(0, np.nan)
+    fig, axs = plt.subplots(1, 3, figsize=(14, 4.2), dpi=120)
+    # Power per Bundesland
+    by_state = (
+        active.groupby("bundesland", dropna=False)
+              .agg(gw=("power_kw", lambda s: s.sum() / 1e6),
+                   gwh=("energy_kwh", lambda s: s.sum() / 1e6),
+                   n=("id", "size"))
+              .sort_values("gw")
+    )
+    by_state.index = by_state.index.fillna("(unknown / cross-border)")
+    y = range(len(by_state))
+    axs[0].barh(y, by_state["gw"], color="#22c55e",
+                edgecolor="#1e293b", linewidth=0.4)
+    axs[0].set_yticks(list(y))
+    axs[0].set_yticklabels(by_state.index, fontsize=9)
+    axs[0].set_xlabel("Power [GW]")
+    axs[0].set_title("PSH power by Bundesland")
+    axs[0].grid(axis="x", alpha=0.3)
+
+    axs[1].barh(y, by_state["gwh"], color="#0ea5e9",
+                edgecolor="#1e293b", linewidth=0.4)
+    axs[1].set_yticks(list(y))
+    axs[1].set_yticklabels(by_state.index, fontsize=9)
+    axs[1].set_xlabel("Energy [GWh]")
+    axs[1].set_title("PSH energy by Bundesland")
+    axs[1].grid(axis="x", alpha=0.3)
+
+    # Duration histogram
+    dur = duration["duration_h"].dropna()
+    dur = dur[(dur > 0) & (dur < 200)]
+    axs[2].hist(dur, bins=20, color="#a78bfa",
+                edgecolor="#1e293b", linewidth=0.4)
+    axs[2].set_xlabel("Duration [h]")
+    axs[2].set_ylabel("Unit count")
+    axs[2].set_title(f"PSH duration distribution\nmedian = {dur.median():.1f} h")
+    axs[2].grid(axis="y", alpha=0.3)
+
+    fig.suptitle(
+        f"Pumped-hydro storage in Germany — {snap.date()} "
+        f"({len(active)} sites · {active_gw:.2f} GW · {active_gwh:.1f} GWh)",
+        fontsize=13,
+    )
+    fig.tight_layout()
+    for d in (FIG, DOCS):
+        fig.savefig(d / out_summary, format="svg", bbox_inches="tight")
+    plt.close(fig)
+
+    # -- 3. Top-15 sites table chart ----------------------------------------
+    top = active.sort_values("power_kw", ascending=False).head(15).iloc[::-1]
+    fig, ax = plt.subplots(figsize=(11, 6), dpi=120)
+    y = range(len(top))
+    ax.barh(y, top["power_kw"] / 1000, color="#0ea5e9",
+            edgecolor="#1e293b", linewidth=0.4, label="Power [MW]")
+    for i, (mw, gwh, ins) in enumerate(zip(
+        top["power_kw"] / 1000, top["energy_kwh"] / 1000, top["install_date"]
+    )):
+        yr = ins.year if pd.notna(ins) else "—"
+        ax.text(mw + max(top["power_kw"] / 1000) * 0.01, i,
+                f"{gwh:.1f} GWh · {yr}",
+                va="center", fontsize=8, color="#475569")
+    ax.set_yticks(list(y))
+    ax.set_yticklabels(top["name"].str[:50], fontsize=9)
+    ax.set_xlabel("Installed power [MW]")
+    ax.set_title(
+        f"Top {len(top)} pumped-hydro storage sites · {snap.date()}\n"
+        "Annotation = installed energy [GWh] · commissioning year"
+    )
+    ax.grid(axis="x", alpha=0.3)
+    fig.tight_layout()
+    for d in (FIG, DOCS):
+        fig.savefig(d / out_top, format="svg", bbox_inches="tight")
+    plt.close(fig)
+
+
 def render_bess_charts(bess_df, units, out_power: str, out_energy: str,
-                       out_duration: str, out_techmix: str, out_growth: str):
-    """Render all five BESS sample charts in one pass."""
+                       out_duration: str, out_growth: str):
+    """Render four battery-only sample charts in one pass.
+
+    `bess_df` must be the **batteries-only** slice (Batterie chemistry);
+    pumped-hydro lives in its own render_psh_charts. The old multi-tech
+    'tech-mix' subchart was dropped post-split — it would have collapsed
+    to a single bar.
+    """
     import matplotlib.colors as mcolors
 
     snap = SNAP
@@ -785,44 +937,6 @@ def render_bess_charts(bess_df, units, out_power: str, out_energy: str,
     fig.tight_layout()
     for d in (FIG, DOCS):
         fig.savefig(d / out_duration, format="svg", bbox_inches="tight")
-    plt.close(fig)
-
-    # -- Tech mix (power + energy) --------------------------------------------
-    mix = (
-        active.groupby("storage_tech")
-              .agg(power_gw=("power_kw", lambda s: s.sum() / 1e6),
-                   energy_gwh=("energy_kwh", lambda s: s.sum() / 1e6),
-                   n=("id", "size"))
-              .sort_values("power_gw")
-    )
-    fig, axs = plt.subplots(1, 2, figsize=(13, 4), dpi=120)
-    y = range(len(mix))
-    axs[0].barh(y, mix["power_gw"], color="#a78bfa",
-                edgecolor="#1e293b", linewidth=0.4)
-    axs[0].set_yticks(list(y))
-    axs[0].set_yticklabels(mix.index)
-    axs[0].set_xlabel("Power [GW]")
-    axs[0].set_title("Storage technology · installed power")
-    axs[0].grid(axis="x", alpha=0.3)
-    if len(mix) and mix["power_gw"].max() > 0:
-        for i, (gw, n) in enumerate(zip(mix["power_gw"], mix["n"])):
-            axs[0].text(gw + mix["power_gw"].max() * 0.01, i,
-                        f"{int(n):,} units", va="center",
-                        fontsize=9, color="#475569")
-    axs[1].barh(y, mix["energy_gwh"], color="#0ea5e9",
-                edgecolor="#1e293b", linewidth=0.4)
-    axs[1].set_yticks(list(y))
-    axs[1].set_yticklabels(mix.index)
-    axs[1].set_xlabel("Energy [GWh]")
-    axs[1].set_title("Storage technology · usable energy capacity")
-    axs[1].grid(axis="x", alpha=0.3)
-    fig.suptitle(
-        f"Battery + other electricity storage by technology — {snap.date()} (active)",
-        fontsize=13,
-    )
-    fig.tight_layout()
-    for d in (FIG, DOCS):
-        fig.savefig(d / out_techmix, format="svg", bbox_inches="tight")
     plt.close(fig)
 
     # -- Cumulative growth (dual axis power + energy) --------------------------
@@ -1028,12 +1142,15 @@ def main():
     render_pv_orientation(records, "sample-pv-orientation.svg")
     render_wind_age(records, "sample-wind-age.svg")
 
+    # Wind: aggregate per project (owner_name proxy for SPV / Windpark)
+    # before binning, since one turbine is rarely a project on its own.
     render_generation_by_size(
         records, "Wind",
         palette=["#cffafe", "#a5f3fc", "#67e8f9", "#22d3ee",
                  "#0891b2", "#155e75", "#1e3a8a"],
         tech_label="Wind", noun="turbines",
         out_name="sample-wind-by-size.svg",
+        aggregate_by="owner_name",
     )
     render_generation_by_size(
         records, "Solare Strahlungsenergie",
@@ -1047,23 +1164,37 @@ def main():
     try:
         bess_df, _ = mastr_plot.load_bess()
     except FileNotFoundError:
-        print("BESS scrape not present — skipping BESS charts.")
+        print("BESS scrape not present — skipping BESS / PSH charts.")
     else:
+        slices = mastr_plot.split_bess_storage(bess_df)
+        batteries = slices["batteries"]
+        psh = slices["psh"]
+
+        # Battery-only charts (BESS in the strict sense; matches
+        # battery-charts.de, BVES, EASE conventions).
         render_bess_charts(
-            bess_df, units,
+            batteries, units,
             out_power="sample-bess-power-map.svg",
             out_energy="sample-bess-energy-map.svg",
             out_duration="sample-bess-duration.svg",
-            out_techmix="sample-bess-tech-mix.svg",
             out_growth="sample-bess-growth.svg",
         )
         render_bess_sector_charts(
-            bess_df,
+            batteries,
             out_summary="sample-bess-sectors.svg",
             out_growth="sample-bess-sector-growth.svg",
             out_duration="sample-bess-sector-duration.svg",
         )
-        render_bess_by_size(bess_df, "sample-bess-by-size.svg")
+        render_bess_by_size(batteries, "sample-bess-by-size.svg")
+
+        # Pumped-hydro storage reported separately.
+        if len(psh):
+            render_psh_charts(
+                psh, units,
+                out_map="sample-psh-map.svg",
+                out_summary="sample-psh-summary.svg",
+                out_top="sample-psh-top.svg",
+            )
 
     print("Sample renders complete.")
 

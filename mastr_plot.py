@@ -233,7 +233,25 @@ def load_bess(data_dir: Path | None = None, demo_if_missing: bool = False) -> tu
     df["effective_date"] = df["install_date"].fillna(df["planned_date"])
     df["duration_h"] = df["energy_kwh"] / df["power_kw"].replace(0, np.nan)
     df["sector"] = df["energy_kwh"].apply(bess_sector)
+    df["is_battery"] = df["storage_tech"] == "Batterie"
+    df["is_psh"] = df["storage_tech"] == "Pumpspeicher"
     return df, False
+
+
+def split_bess_storage(df: pd.DataFrame) -> dict:
+    """Return three disjoint slices: batteries, pumped-hydro, and "other".
+
+    Convention follows battery-charts.de / BVES — pumped-hydro is reported
+    separately from batteries because it has a fundamentally different
+    technology, lifecycle (50+ years vs 10-15), and grid-services profile.
+    "Other" picks up Wasserstoffspeicher / Druckluft / Schwungrad which
+    are all sub-MW and mostly pilot installations.
+    """
+    return {
+        "batteries": df[df["is_battery"]].copy(),
+        "psh":       df[df["is_psh"]].copy(),
+        "other":     df[~df["is_battery"] & ~df["is_psh"]].copy(),
+    }
 
 
 def aggregate_bess_by_unit(

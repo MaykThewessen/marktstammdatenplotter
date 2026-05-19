@@ -154,26 +154,29 @@ Decommission wave from 2019 onwards: first EEG cohort reaching its 20-year
 boundary. Mean per-turbine MW has grown 15× since the late 90s (0.5 → 7 MW),
 driven by the new 15 MW offshore class.
 
-### Battery + electricity storage (BESS)
+### Battery storage (BESS) — batteries only
 
 ![BESS power per Kreis](fig/sample-bess-power-map.svg)
 
-MaStR carries 2.5 M storage records under `Energieträger=2496`. Top 200k by
-power covers everything from the 1 GW **GigaBattery Jänschwalde** (planned)
-down to ~10 kW home batteries.
+MaStR carries 2.5 M storage records under `Energieträger=2496`. Below
+covers **batteries only** (`Stromspeichertechnologie = "Batterie"`).
+**Pumped-hydro storage gets its [own section](#pumped-hydro-storage-psh)**
+because it's a fundamentally different technology and reported separately
+everywhere serious.
 
-**Snapshot 2026-05-01 (active):** 193 678 units · **12.97 GW / 936.9 GWh**.
-Pipeline (+ planned-and-permitted): **+8.2 GW LSS Li-ion** by ~ 2028.
+**Snapshot 2026-05-01 (batteries, active):** 193 599 units · **6.49 GW
+/ 9.4 GWh**. Pipeline (+ planned-and-permitted): **+ ~ 8 GW LSS Li-ion**
+by ~ 2028.
 
 #### Three-sector split (battery-charts.de / BVES / EASE convention)
 
 ![BESS sectors](fig/sample-bess-sectors.svg)
 
-| Sector | Threshold | Active 2026-05-01 |
+| Sector | Threshold | Batteries active 2026-05-01 |
 |---|---|---|
-| **HSS** Heimspeicher | < 30 kWh | 176 441 units · 2.47 GW · 2.54 GWh |
-| **CSS** Gewerblich | 30 kWh – 1 MWh | 16 659 units · 0.68 GW · 1.20 GWh |
-| **LSS** Großspeicher | ≥ 1 MWh | 569 units · **9.81 GW · 933 GWh** |
+| **HSS** Heimspeicher | < 30 kWh | 176 411 units · 2.47 GW · 2.54 GWh |
+| **CSS** Gewerblich | 30 kWh – 1 MWh | 16 655 units · 0.68 GW · 1.20 GWh |
+| **LSS** Großspeicher | ≥ 1 MWh | 526 units · **3.34 GW · 5.65 GWh** |
 
 Same thresholds as [battery-charts.de](https://battery-charts.de) (RWTH
 Aachen · Figgener et al.), the
@@ -184,20 +187,25 @@ EU SET-Plan flexibility scenarios. Useful for direct cross-reference.
 ![BESS sector growth](fig/sample-bess-sector-growth.svg)
 
 HSS is the headcount story (176k households with PV+battery).
-LSS is the GW + GWh story (Pumpspeicher already at 6.5 GW / 927 GWh,
-plus the 8 GW Li-ion build-out coming).
+LSS is the GW + GWh story (grid-scale Li-ion at 3.3 GW + 8 GW more in
+the pipeline).
 
-| Power split | Energy split |
+### Pumped-hydro storage (PSH)
+
+![PSH energy per Kreis](fig/sample-psh-map.svg)
+
+41 sites · **6.48 GW · 927.5 GWh** active at 2026-05-01 — roughly 100×
+the energy density of Li-ion batteries because PSH was built for
+multi-hour duration. Median duration ~ 8 h vs ~ 1 h for residential Li-ion.
+
+| Per-state breakdown + duration | Top 15 sites |
 |---|---|
-| Pumpspeicher 6.48 GW (41 sites) | Pumpspeicher 927 GWh |
-| Batterie 6.49 GW (193k units) | Batterie 9.4 GWh |
+| ![PSH summary](fig/sample-psh-summary.svg) | ![PSH top sites](fig/sample-psh-top.svg) |
 
-Roughly equal power, ~100× energy asymmetry — Li-ion sits in the 1-2 h
-duration band; hydro PSH is built for many hours.
+Goldisthal (Thüringen) alone — 4 PSS units × 265 MW × 9.64 GWh — accounts
+for 1.06 GW + 38.5 GWh.
 
-| Duration histogram | Tech mix |
-|---|---|
-| ![BESS duration](fig/sample-bess-duration.svg) | ![BESS tech mix](fig/sample-bess-tech-mix.svg) |
+![BESS duration](fig/sample-bess-duration.svg)
 
 ![BESS cumulative growth](fig/sample-bess-growth.svg)
 
