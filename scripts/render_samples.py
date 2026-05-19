@@ -1442,7 +1442,7 @@ def render_bundesland_chart(records, units, out_name):
     fig, ax = plt.subplots(figsize=(10, 6), dpi=120)
     y = range(len(combined))
     ax.barh(y, combined["Wind"], color="#0ea5e9", label="Wind")
-    ax.barh(y, combined["PV (≥200 kW)"], left=combined["Wind"], color="#f59e0b", label="PV (≥200 kW)")
+    ax.barh(y, combined["PV"], left=combined["Wind"], color="#f59e0b", label="PV")
     ax.set_yticks(list(y))
     ax.set_yticklabels(combined.index)
     ax.set_xlabel("Installed capacity [GW]")
