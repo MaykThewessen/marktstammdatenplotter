@@ -193,7 +193,6 @@ def load_admin_units(gpkg_path: Path | None = None, demo_if_missing: bool = True
         return _synthetic_admin_units(), True
 
     gdf = gpd.read_file(chosen, layer="multipolygons")
-    gdf["geometry"] = gdf["geometry"].simplify(0.005, preserve_topology=True)
     return gdf, False
 
 
