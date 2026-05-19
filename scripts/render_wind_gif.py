@@ -78,9 +78,8 @@ def render_frames(records, units, cfg) -> tuple[int, Path]:
     for snap in dates:
         agg, active = mastr_plot.aggregate_by_unit(records, units, snap, cfg["energy_type"])
         total_gw = active["power"].sum() / 1e6
-        # plot_choropleth appends the date automatically, so don't repeat it here.
         title = (
-            f"{cfg['title']}\n"
+            f"{cfg['title']} — {snap.isoformat()}\n"
             f"{len(active):,} {cfg['noun']}{cfg['extra_subtitle']} · "
             f"{round(total_gw, 1)} GW"
         )

@@ -271,6 +271,7 @@ def plot_choropleth(
         missing_kwds={"color": "#eeeeee"},
     )
     ax.set_axis_off()
-    ax.set_title(f"{title}\n{plot_date.isoformat()}", fontsize=13)
+    # `title` is used verbatim — callers control where the date appears.
+    ax.set_title(title, fontsize=13)
     fig.tight_layout()
     return fig

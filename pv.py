@@ -102,7 +102,7 @@ def _map(
     )
     fig = mastr_plot.plot_choropleth(
         agg, plot_date=date_slider.value,
-        title=f"PV capacity — {len(active):,} plants active",
+        title=f"PV capacity — {date_slider.value.isoformat()}\n{len(active):,} plants active",
         bins=bins, cmap=cmap_picker.value, scale=scale_picker.value,
     )
     mo.mpl.interactive(fig)
