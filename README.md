@@ -3,11 +3,11 @@
 > Animated choropleth maps of installed wind & solar capacity in Germany,
 > driven by data scraped from the public Marktstammdatenregister (MaStR).
 
-| Wind | PV (≥ 49 kW) |
+| Wind | PV (all sizes) |
 |---|---|
 | ![Wind capacity 2005→May 2026](fig/wind-2005-may2026.gif) | ![PV capacity 2005→May 2026](fig/pv-2005-may2026.gif) |
 
-*Installed wind (left) and PV (right, top 200 000 plants ≥ 49 kW) capacity
+*Installed wind (left) and PV (right, full registry ~4.86 M plants, all sizes) capacity
 per Kreis, 2005 → May 2026. 22 yearly frames plus a final May 2026 YTD
 snapshot from the live registry. Fixed Jenks bins so colors stay comparable
 across years. Available as `.gif` (universal autoplay) and `.mp4`
@@ -248,7 +248,7 @@ Top per-km² Kreise: **Dithmarschen** 1.6 MW/km² wind, **Straubing Stadt**
 
 ![2024 additions](fig/sample-2024-additions.svg)
 
-Where Germany actually installed new wind + PV (≥ 49 kW) during 2024 — 13.4 GW
+Where Germany actually installed new wind + PV during 2024 — 13.4 GW
 in this scrape. Leipziger Land alone added 565 MW (utility solar in the
 former-lignite belt).
 
@@ -265,8 +265,8 @@ third at 18 GW (mixed).
 ![PV by type](fig/sample-pv-by-type.svg)
 
 16 000 free-standing utility parks carry ~ 43 GW. 184 000 building-mounted
-commercial rooftops carry ~ 30 GW. The under-49 kW residential / balcony long
-tail (millions of plants, ~ 30 GW total) is excluded from this scrape.
+commercial rooftops carry ~ 30 GW. Residential and balcony plants (millions
+of units, ~ 30 GW) are included in the full-registry scrape.
 
 ---
 
@@ -462,13 +462,12 @@ the GIF loops. Drop `-loop 0` if you want a one-shot.
 
 ## What this method does **not** track
 
-The choropleths and animations capture the bulk of utility + commercial
-capacity, but a few categories are systematically excluded — list them
+The choropleths and animations cover the full PV registry (all sizes) and the
+complete wind fleet, but a few categories are systematically excluded — listed
 explicitly so nobody draws the wrong conclusion:
 
 | Excluded | Why | Approx scale |
 |---|---|---|
-| PV plants < 49 kW (residential rooftop, balcony) | Top-200 k-by-capacity scrape cap | ~ 25 GW |
 | Records with NaT `install_date` | Snapshot filter is `install_date ≤ snap` | ~ 15 k rows / 71 GW (mostly legacy conventional) |
 | Records with NaN `Laengengrad` / `Breitengrad` | Spatial join drops them | ~ 76 k rows / 0.8 GW |
 | Offshore turbines in choropleths | No Kreis covers open sea | 1 732 turbines / 10.4 GW *(reported separately)* |

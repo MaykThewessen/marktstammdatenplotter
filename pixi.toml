@@ -23,7 +23,20 @@ ipykernel   = "*"
 ffmpeg      = "*"
 requests    = "*"
 
+# open-mastr is PyPI-only (not on conda-forge as of v0.17.1).
+# Provides bulk MaStR XML → SQLite at ~/.open-MaStR/data/sqlite/open-mastr.db.
+[pypi-dependencies]
+open-mastr = ">=0.17"
+
 [tasks]
+# Bulk download of MaStR into SQLite at ~/.open-MaStR/data/sqlite/open-mastr.db.
+# Single-tech variants avoid the multi-GB full pull.
+db-mastr-wind    = "python -c \"from open_mastr import Mastr; Mastr().download(data=['wind'])\""
+db-mastr-solar   = "python -c \"from open_mastr import Mastr; Mastr().download(data=['solar'])\""
+db-mastr-storage = "python -c \"from open_mastr import Mastr; Mastr().download(data=['storage'])\""
+db-mastr-core    = "python -c \"from open_mastr import Mastr; Mastr().download(data=['wind','solar','storage'])\""
+db-mastr-all     = "python -c \"from open_mastr import Mastr; Mastr().download()\""
+
 # One-shot scrapes — uses the README's curl recipes.
 scrape-non-pv = """
 mkdir -p data && \

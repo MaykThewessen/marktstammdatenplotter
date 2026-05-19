@@ -17,11 +17,30 @@ choropleth maps of installed wind and solar capacity.
 
 ```
 parser.py           Dataclass + JSON-to-PowerPlant decoder for MaStR records
+mastr_db.py         Loader for the open-mastr SQLite snapshot (bulk path)
+fetch_mastr.py      Custom JSON-API scraper (incremental / top-N path)
 wind.ipynb          End-to-end map rendering (load → join → plot → save frames)
 fig/                Rendered PNG/GIF outputs (gitignored)
 docs/               Read-the-Docs-style site published via GitHub Pages
 README.md           User-facing quickstart
 ```
+
+## Data sources
+
+Two MaStR fetch paths live side by side:
+
+1. **`open-mastr` bulk XML → SQLite** (preferred for whole-dataset work).
+   Refresh via `pixi run db-mastr-core` (wind+solar+storage) or `db-mastr-all`.
+   DB lands at `~/.open-MaStR/data/sqlite/open-mastr.db`. Load with
+   `mastr_db.load_geo("wind")`. Enum codes already decoded — no `parser.py`
+   mapping needed.
+2. **Custom JSON scrape** (`fetch_mastr.py` / `parser.py`) — incremental
+   top-N-by-power pulls (`pixi run scrape-bess`, `scrape-non-pv`). Keep this
+   for resumable per-page caches.
+
+Anonymisation: `open-mastr` rows < 30 kW have NULL `Laengengrad`/`Breitengrad`
+(MaStR publication rules). `mastr_db.load_geo(..., drop_anonymised=True)` skips
+them; aggregate to Kreis via the name-fallback in `mastr_plot.py` if needed.
 
 ## Data model
 
@@ -47,9 +66,11 @@ human-readable strings. When extending the parser:
 
 ## Common tasks
 
-- **Refresh raw data**: re-run the `curl | xargs` block in README.md against the
-  MaStR API. Cache JSON on disk — the API is slow and rate-limited. Re-runs
-  should skip files that already exist.
+- **Refresh raw data (bulk)**: `pixi run db-mastr-core` — daily-fresh SQLite,
+  ~15–30 min, resumable via `keep_old_downloads=True`.
+- **Refresh raw data (incremental)**: re-run the `curl | xargs` block in
+  README.md against the MaStR JSON API. Cache JSON on disk — slow + rate-limited.
+  Re-runs skip existing files.
 - **Rebuild county polygons**: rerun the `osmfilter` + `ogr2ogr` chain from a
   fresh `germany-latest.o5m`. Output is `germany_kreise.gpkg`.
 - **Render an animation**: open `wind.ipynb`, run all cells. Frames land in

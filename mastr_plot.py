@@ -193,6 +193,7 @@ def load_admin_units(gpkg_path: Path | None = None, demo_if_missing: bool = True
         return _synthetic_admin_units(), True
 
     gdf = gpd.read_file(chosen, layer="multipolygons")
+    gdf["geometry"] = gdf["geometry"].simplify(0.005, preserve_topology=True)
     return gdf, False
 
 
@@ -519,6 +520,19 @@ def load_from_bulk(
     return df, True
 
 
+def _ensure_wgs84(admin_units):
+    """Reproject admin_units to EPSG:4326 if needed.
+
+    All record coordinates (`longitude`, `latitude`) are EPSG:4326. Silently
+    accepting a mismatched-CRS admin_units would produce wrong spatial joins,
+    so reproject defensively. No-op when already WGS84 or CRS is missing
+    (synthetic units case).
+    """
+    if admin_units.crs is not None and admin_units.crs.to_epsg() != 4326:
+        return admin_units.to_crs("EPSG:4326")
+    return admin_units
+
+
 def aggregate_by_landkreis_name(
     records: pd.DataFrame,
     admin_units,
@@ -591,6 +605,7 @@ def aggregate_bess_by_unit(
     """
     import geopandas as gpd
 
+    admin_units = _ensure_wgs84(admin_units)
     ts = pd.Timestamp(plot_date)
     date_col = "effective_date" if include_planned else "install_date"
     sub = records[
@@ -672,8 +687,8 @@ def aggregate_by_unit(
 ):
     """Spatial-join active plants to admin units and sum power (GW)."""
     import geopandas as gpd
-    from shapely.geometry import Point
 
+    admin_units = _ensure_wgs84(admin_units)
     ts = pd.Timestamp(plot_date)
     sub = records[
         (records["energy_type"] == energy_type)
