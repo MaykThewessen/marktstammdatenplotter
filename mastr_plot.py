@@ -313,10 +313,78 @@ def find_bulk_dir() -> Path | None:
     return None
 
 
+# BKG VG2500 names → Destatis 5-digit Kreisschlüssel for the 23 city/Landkreis
+# pairs that collide after normalisation (e.g. MaStR `landkreis="Passau"` maps
+# to both "Passau, Kreisfreie Stadt" and "Passau, Landkreis"). Used by
+# `aggregate_by_unit` / `aggregate_bess_by_unit` to disambiguate anonymised
+# rows via the first 5 digits of MaStR's `municipality_key` (AGS) field.
+KREIS_NAME_TO_AGS5 = {
+    # Bavaria
+    "München, Kreisfreie Stadt":          "09162",
+    "München, Landkreis":                 "09184",
+    "Rosenheim, Kreisfreie Stadt":        "09163",
+    "Rosenheim, Landkreis":               "09187",
+    "Landshut, Kreisfreie Stadt":         "09261",
+    "Landshut, Landkreis":                "09274",
+    "Passau, Kreisfreie Stadt":           "09262",
+    "Passau, Landkreis":                  "09275",
+    "Regensburg, Kreisfreie Stadt":       "09362",
+    "Regensburg, Landkreis":              "09375",
+    "Bamberg, Kreisfreie Stadt":          "09461",
+    "Bamberg, Landkreis":                 "09471",
+    "Bayreuth, Kreisfreie Stadt":         "09462",
+    "Bayreuth, Landkreis":                "09472",
+    "Coburg, Kreisfreie Stadt":           "09463",
+    "Coburg, Landkreis":                  "09473",
+    "Hof, Kreisfreie Stadt":              "09464",
+    "Hof, Landkreis":                     "09475",
+    "Ansbach, Kreisfreie Stadt":          "09561",
+    "Ansbach, Landkreis":                 "09571",
+    "Fürth, Kreisfreie Stadt":            "09563",
+    "Fürth, Landkreis":                   "09573",
+    "Aschaffenburg, Kreisfreie Stadt":    "09661",
+    "Aschaffenburg, Landkreis":           "09671",
+    "Schweinfurt, Kreisfreie Stadt":      "09662",
+    "Schweinfurt, Landkreis":             "09678",
+    "Würzburg, Kreisfreie Stadt":         "09663",
+    "Würzburg, Landkreis":                "09679",
+    "Augsburg, Kreisfreie Stadt":         "09761",
+    "Augsburg, Landkreis":                "09772",
+    # Baden-Württemberg
+    "Heilbronn, Stadtkreis":              "08121",
+    "Heilbronn, Landkreis":               "08125",
+    "Karlsruhe, Stadtkreis":              "08212",
+    "Karlsruhe, Landkreis":               "08215",
+    # Hessen
+    "Kassel, Kreisfreie Stadt":           "06611",
+    "Kassel, Landkreis":                  "06633",
+    # Rheinland-Pfalz
+    "Kaiserslautern, Kreisfreie Stadt":   "07312",
+    "Kaiserslautern, Landkreis":          "07335",
+    # Niedersachsen
+    "Oldenburg (Oldenburg), Kreisfreie Stadt": "03403",
+    "Oldenburg, Landkreis":               "03458",
+    "Osnabrück, Kreisfreie Stadt":        "03404",
+    "Osnabrück, Landkreis":               "03459",
+    # Mecklenburg-Vorpommern
+    "Rostock, Kreisfreie Stadt":          "13003",
+    "Landkreis Rostock":                  "13072",
+    # Sachsen
+    "Leipzig, Kreisfreie Stadt":          "14713",
+    "Leipzig":                            "14729",
+}
+
+
 _KREIS_PREFIX_RE = re.compile(r"^(Stadt|Landkreis|Kreis|LK)\s+", re.IGNORECASE)
 _KREIS_PAREN_RE = re.compile(r"\s+\([^)]+\)$")
 _KREIS_STADTE_RE = re.compile(r"\s+St[aä]dte$", re.IGNORECASE)
 _KREIS_SUFFIX_RE = re.compile(r"\s+-?Kreis$", re.IGNORECASE)
+# BKG VG2500 names use ", <type>" suffix: "Passau, Landkreis",
+# "München, Kreisfreie Stadt", "Karlsruhe, Stadtkreis", "Berlin, Stadt".
+_KREIS_COMMA_TYPE_RE = re.compile(
+    r",\s*(Landkreis|Kreisfreie\s+Stadt|Stadtkreis|Stadt|Kreis)\s*$",
+    re.IGNORECASE,
+)
 _KREIS_DOT_WS_RE = re.compile(r"\s*\.\s*")
 _KREIS_WS_RE = re.compile(r"\s+")
 _UMLAUT_TRANS = str.maketrans(
@@ -348,6 +416,7 @@ def normalise_kreis_name(s):
     if s is None or (isinstance(s, float) and pd.isna(s)):
         return None
     s = str(s).strip()
+    s = _KREIS_COMMA_TYPE_RE.sub("", s)
     s = _KREIS_PREFIX_RE.sub("", s)
     s = _KREIS_PAREN_RE.sub("", s)
     s = _KREIS_STADTE_RE.sub("", s)
@@ -647,20 +716,24 @@ def aggregate_bess_by_unit(
     if (~has_coords).any() and "landkreis_norm" in sub.columns:
         anon = sub[~has_coords]
         key = admin_units["name"].apply(normalise_kreis_name)
-        # Warn when two Kreise normalise to the same key (e.g. Augsburg
-        # Stadtkreis vs. Landkreis Augsburg) — anonymised units are
-        # unresolvable and will be attributed to whichever Kreis is last.
-        dupes = key[key.duplicated()].unique()
-        if len(dupes):
-            import warnings
-            warnings.warn(
-                f"aggregate_bess_by_unit: {len(dupes)} ambiguous Kreis name(s) "
-                f"after normalisation {list(dupes[:5])} — anonymised BESS units "
-                "with those names will be attributed to the last matching Kreis.",
-                stacklevel=2,
-            )
+        # MaStR landkreis text is just the city/county name (e.g. "Passau")
+        # but BKG VG2500 has two entries — "Passau, Landkreis" and
+        # "Passau, Kreisfreie Stadt" — that both normalise to "passau".
+        # MaStR does not disambiguate. Drop duplicate-name lookup keys and
+        # attribute deterministically to the first matching Kreis.
         name_to_idx = pd.Series(admin_units.index, index=key.values)
+        name_to_idx = name_to_idx[~name_to_idx.index.duplicated(keep="first")]
         anon_idx = anon["landkreis_norm"].map(name_to_idx)
+        # AGS5 override (see aggregate_by_unit for explanation).
+        if "municipality_key" in anon.columns:
+            ags5_to_idx = {
+                KREIS_NAME_TO_AGS5[n]: i
+                for i, n in admin_units["name"].items()
+                if n in KREIS_NAME_TO_AGS5
+            }
+            anon_ags5 = anon["municipality_key"].astype(str).str[:5]
+            ags_override = anon_ags5.map(ags5_to_idx)
+            anon_idx = ags_override.combine_first(anon_idx)
         pwr_name = anon.groupby(anon_idx)["power_kw"].sum() / 1e6
         enr_name = anon.groupby(anon_idx)["energy_kwh"].sum() / 1e6
         pwr_by_idx = pwr_by_idx.add(pwr_name, fill_value=0.0)
@@ -693,7 +766,13 @@ def aggregate_by_unit(
     plot_date: date,
     energy_type: str,
 ):
-    """Spatial-join active plants to admin units and sum power (GW)."""
+    """Aggregate active plants to admin units, summing power (GW).
+
+    Uses spatial join for units with coordinates, and a name-based landkreis
+    join for anonymised rows (no lat/lon but `landkreis_norm` present). For
+    PV in the bulk dump this recovers ~95% of installed capacity that the
+    spatial-only path drops.
+    """
     import geopandas as gpd
 
     admin_units = _ensure_wgs84(admin_units)
@@ -708,12 +787,41 @@ def aggregate_by_unit(
         admin_units["power_gw"] = 0.0
         return admin_units, sub
 
-    geom = gpd.points_from_xy(sub["longitude"], sub["latitude"], crs="EPSG:4326")
-    pts = gpd.GeoDataFrame(sub, geometry=geom, crs="EPSG:4326")
-    joined = gpd.sjoin(pts, admin_units[["geometry"]], predicate="within", how="left")
-    agg = joined.groupby("index_right")["power"].sum() / 1e6  # kW → GW
+    has_coords = sub["latitude"].notna() & sub["longitude"].notna()
+    pwr_by_idx = pd.Series(0.0, index=admin_units.index, dtype=float)
+
+    if has_coords.any():
+        geo_sub = sub[has_coords]
+        geom = gpd.points_from_xy(geo_sub["longitude"], geo_sub["latitude"], crs="EPSG:4326")
+        pts = gpd.GeoDataFrame(geo_sub, geometry=geom, crs="EPSG:4326")
+        joined = gpd.sjoin(pts, admin_units[["geometry"]], predicate="within", how="left")
+        pwr_by_idx = pwr_by_idx.add(
+            joined.groupby("index_right")["power"].sum() / 1e6, fill_value=0.0
+        )
+
+    if (~has_coords).any() and "landkreis_norm" in sub.columns:
+        anon = sub[~has_coords]
+        key = admin_units["name"].apply(normalise_kreis_name)
+        name_to_idx = pd.Series(admin_units.index, index=key.values)
+        name_to_idx = name_to_idx[~name_to_idx.index.duplicated(keep="first")]
+        anon_idx = anon["landkreis_norm"].map(name_to_idx)
+        # AGS5 override: when a row carries MaStR `municipality_key`, use the
+        # first 5 digits (canonical Kreisschlüssel) to disambiguate Stadt vs.
+        # Landkreis (e.g. 09262 → Passau Stadt, 09275 → Passau Landkreis).
+        if "municipality_key" in anon.columns:
+            ags5_to_idx = {
+                KREIS_NAME_TO_AGS5[n]: i
+                for i, n in admin_units["name"].items()
+                if n in KREIS_NAME_TO_AGS5
+            }
+            anon_ags5 = anon["municipality_key"].astype(str).str[:5]
+            ags_override = anon_ags5.map(ags5_to_idx)
+            anon_idx = ags_override.combine_first(anon_idx)
+        pwr_name = anon.groupby(anon_idx)["power"].sum() / 1e6
+        pwr_by_idx = pwr_by_idx.add(pwr_name, fill_value=0.0)
+
     out = admin_units.copy()
-    out["power_gw"] = out.index.map(agg).astype(float).fillna(0.0)
+    out["power_gw"] = pwr_by_idx.reindex(out.index).fillna(0.0)
     return out, sub
 
 
