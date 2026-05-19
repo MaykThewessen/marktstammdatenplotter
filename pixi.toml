@@ -70,12 +70,33 @@ for p in 1 2 3 4 5 6 7 8; do \
 done; wait
 """
 
+# Build germany_kreise.gpkg from BKG VG2500 (1:2.5M Verwaltungsgebiete,
+# stand 31.12). Post-reform Landkreis names (~ 400 rows) — closes the
+# ~ 16 % name-match gap left by the pre-2007/2011 isellsoap GeoJSON.
+# Licence: Datenlizenz Deutschland Namensnennung 2.0 (dl-de/by-2-0),
+# attribution: "© GeoBasis-DE / BKG (2025)".
 fetch-kreise = """
-curl -sSL -o /tmp/kreise.geojson \
-  'https://raw.githubusercontent.com/isellsoap/deutschlandGeoJSON/main/4_kreise/4_niedrig.geo.json' && \
-python -c "import geopandas as gpd; g = gpd.read_file('/tmp/kreise.geojson'); \
-g = g.rename(columns={'NAME_3':'name','NAME_1':'bundesland'}); g['admin_level']='6'; \
-g[['name','admin_level','bundesland','geometry']].to_file('germany_kreise.gpkg', layer='multipolygons', driver='GPKG')"
+curl -sSL -o /tmp/vg2500.zip \
+  'https://daten.gdz.bkg.bund.de/produkte/vg/vg2500/aktuell/vg2500_12-31.utm32s.gpkg.zip' && \
+rm -rf /tmp/vg2500 && unzip -q -o /tmp/vg2500.zip -d /tmp/vg2500 && \
+python -c "
+import os, geopandas as gpd
+src = '/tmp/vg2500/vg2500_12-31.utm32s.gpkg/vg2500/DE_VG2500.gpkg'
+krs = gpd.read_file(src, layer='vg2500_krs')
+lan = (gpd.read_file(src, layer='vg2500_lan')
+         .drop_duplicates(subset='SN_L')[['SN_L', 'GEN']]
+         .rename(columns={'GEN': 'bundesland'}))
+krs = krs.merge(lan, on='SN_L', how='left').rename(columns={'GEN': 'name'})
+city_states = {'Berlin', 'Hamburg', 'Bremen'}
+krs['admin_level'] = krs.apply(
+    lambda r: '4' if r['name'] in city_states and r['bundesland'] in city_states else '6',
+    axis=1)
+out = krs[['name', 'admin_level', 'bundesland', 'geometry']].to_crs('EPSG:4326')
+dst = 'germany_kreise.gpkg'
+if os.path.exists(dst): os.remove(dst)
+out.to_file(dst, layer='multipolygons', driver='GPKG')
+print('rows:', len(out))
+"
 """
 
 # Marimo notebook entry points
