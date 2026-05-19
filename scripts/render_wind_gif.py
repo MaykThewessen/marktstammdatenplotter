@@ -77,10 +77,11 @@ def render_frames(records, units, cfg) -> tuple[int, Path]:
     idx = 0
     for snap in dates:
         agg, active = mastr_plot.aggregate_by_unit(records, units, snap, cfg["energy_type"])
+        total_gw = active["power"].sum() / 1e6
         title = (
             f"{cfg['title']} — {snap.isoformat()}\n"
             f"{len(active):,} {cfg['noun']}{cfg['extra_subtitle']} · "
-            f"{round(agg['power_gw'].sum(), 1)} GW"
+            f"{round(total_gw, 1)} GW"
         )
         fig = mastr_plot.plot_choropleth(
             agg, snap, title, bins=bins, cmap=cfg["cmap"],

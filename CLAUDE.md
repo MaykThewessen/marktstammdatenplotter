@@ -64,9 +64,14 @@ human-readable strings. When extending the parser:
   Wattenmeer" as part_id 2; the notebook strips it explicitly. Keep that fix
   if rebuilding from a newer OSM extract — verify the part_id has not shifted.
 - `Bruttoleistung` is in kW; the notebook divides by 1e6 to get GW for legends.
-- Off-shore turbines have anonymized coordinates (`StandortAnonymisiert`
-  starts with "Nordsee" / "Ostsee"); the notebook draws them in synthetic sea
-  rectangles, not their real positions.
+- Off-shore turbines carry **real** `Laengengrad` / `Breitengrad` (verified
+  for 1 909 / 1 909 offshore rows). The `StandortAnonymisiert` string is
+  *labelled* "Nordsee" / "Ostsee" — but coordinates are intact. The original
+  notebook draws synthetic sea rectangles anyway; that workaround is not
+  required by the data and can be dropped if you want point-accurate offshore
+  rendering. Aggregation to Kreis polygons still drops these points because
+  no Kreis covers open sea — handle with a separate "sea zone" lookup if
+  per-farm aggregation matters.
 
 ## Style
 

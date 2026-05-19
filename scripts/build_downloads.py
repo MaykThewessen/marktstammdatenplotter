@@ -55,8 +55,13 @@ def build_snapshot(df, units):
     joined = joined.loc[~joined.index.duplicated(keep="first")]
     out["kreis"] = joined["name"].reindex(out.reset_index(drop=True).index).astype("string").values
     out["bundesland"] = joined["bundesland"].reindex(out.reset_index(drop=True).index).astype("string").values
+    # Same active filter as mastr_plot.aggregate_by_unit — keeps the
+    # parquet/CSV consistent with the rendered choropleths.
+    # NaT install_date is treated as "unknown commissioning date" and
+    # excluded; record-keepers can re-derive it from `install_date.isna()`
+    # if they want to include legacy conventional plants.
     out["active_at_snap"] = (
-        (out["install_date"].isna() | (out["install_date"] <= SNAP))
+        (out["install_date"] <= SNAP)
         & (out["removal_date"].isna() | (out["removal_date"] > SNAP))
     )
     return out

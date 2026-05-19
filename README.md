@@ -370,6 +370,29 @@ the GIF loops. Drop `-loop 0` if you want a one-shot.
 
 ---
 
+## What this method does **not** track
+
+The choropleths and animations capture the bulk of utility + commercial
+capacity, but a few categories are systematically excluded — list them
+explicitly so nobody draws the wrong conclusion:
+
+| Excluded | Why | Approx scale |
+|---|---|---|
+| PV plants < 49 kW (residential rooftop, balcony) | Top-200 k-by-capacity scrape cap | ~ 25 GW |
+| Records with NaT `install_date` | Snapshot filter is `install_date ≤ snap` | ~ 15 k rows / 71 GW (mostly legacy conventional) |
+| Records with NaN `Laengengrad` / `Breitengrad` | Spatial join drops them | ~ 76 k rows / 0.8 GW |
+| Offshore turbines in choropleths | No Kreis covers open sea | 1 732 turbines / 10.4 GW *(reported separately)* |
+| Battery storage (Speicher) | `Energieträger` codes 2495 + 2496 filtered out | several GW BESS |
+| Heat-only plants (Wärme) | Outside Wind+PV scope | ~ 2 GW thermal |
+| Plants approved but not commissioned | No `InbetriebnahmeDatum` yet | several GW pipeline |
+| Behind-the-meter / unregistered Balkonkraftwerke | Registration was optional pre-2017 | ~ 0.5 GW |
+| Plants decommissioned before snapshot | Removed by `removal_date > snap` filter | 3 GW cumulative since 2013 |
+
+Offshore lat/lon: contrary to the original notebook's assumption, MaStR
+*does* carry real coordinates for offshore plants. The `StandortAnonymisiert`
+field is only a sea label ("Nordsee…" / "Ostsee…"). Drop the synthetic-sea
+workaround if you want point-accurate offshore positions.
+
 ## Credits
 
 Forked from [emmericp/marktstammdatenplotter](https://github.com/emmericp/marktstammdatenplotter).

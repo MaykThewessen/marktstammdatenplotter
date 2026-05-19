@@ -14,6 +14,25 @@ All notable changes to this project. Follows
   captures YTD additions (4 981 new plants registered in 2026 alone).
   New filenames `wind-2005-may2026.gif` + `pv-2005-may2026.gif`;
   `snapshot_dates()` helper makes the cap configurable in one place.
+- README "What this method does **not** track" table listing every
+  systematically-excluded category (sub-49 kW PV, NaT install rows, NaN
+  coords, offshore choropleth, batteries, heat-only, etc.).
+
+### Fixed
+- **Title GW under-reported on choropleths.** `render_samples.py` and
+  `render_wind_gif.py` titles previously used `agg["power_gw"].sum()` —
+  the per-Kreis-aggregated total — which silently excludes points
+  outside any Kreis polygon. For wind that's 3 098 turbines /
+  11.3 GW of offshore + slightly-misaligned coastal capacity. Titles
+  now use the active-set total (`active["power"].sum() / 1e6`) and
+  the map adds a footnote when offshore / out-of-Kreis capacity > 1 GW.
+- **`active_at_snap` flag in the parquet/CSV downloads previously
+  treated NaT install_date as active**, inconsistent with every other
+  filter in the codebase. Now matches `mastr_plot.aggregate_by_unit`.
+- **Documentation said offshore lat/lon was anonymised — false.**
+  All 1 909 offshore rows carry real `Laengengrad` / `Breitengrad`.
+  Only the `StandortAnonymisiert` string is a "Nordsee/Ostsee" label.
+  README, CLAUDE.md, and docs/index.html corrected.
 
 ### Changed
 - Renamed: `wind-2005-2025.gif` → `wind-2005-may2026.gif`,

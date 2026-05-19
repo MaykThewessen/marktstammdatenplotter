@@ -35,11 +35,13 @@ def render_map(records, units, energy_type, title_prefix, cmap, out_name):
     agg, active = mastr_plot.aggregate_by_unit(records, units, SNAP.date(), energy_type)
     positive = agg["power_gw"][agg["power_gw"] > 0].to_numpy()
     bins = mastr_plot.jenks_bins(positive, k=7)
-    fig = mastr_plot.plot_choropleth(
-        agg, SNAP.date(),
-        f"{title_prefix} — {len(active):,} plants · {round(agg['power_gw'].sum(),1)} GW",
-        bins=bins, cmap=cmap,
-    )
+    total_gw = active["power"].sum() / 1e6
+    shown_gw = agg["power_gw"].sum()
+    title = f"{title_prefix} — {len(active):,} plants · {round(total_gw, 1)} GW"
+    if total_gw - shown_gw > 1.0:
+        title += f"\n({round(shown_gw, 1)} GW shown on map · " \
+                 f"{round(total_gw - shown_gw, 1)} GW offshore / out-of-Kreis)"
+    fig = mastr_plot.plot_choropleth(agg, SNAP.date(), title, bins=bins, cmap=cmap)
     for d in (FIG, DOCS):
         fig.savefig(d / out_name, format="svg", bbox_inches="tight")
     plt.close(fig)
@@ -286,7 +288,7 @@ def render_density_map(records, units, energy_type, cmap, out_name, title_prefix
     ax.set_axis_off()
     ax.set_title(
         f"{title_prefix} per km² — {SNAP.date()}\n"
-        f"{len(active):,} active · {round(agg['power_gw'].sum(), 1)} GW total",
+        f"{len(active):,} active · {round(active['power'].sum() / 1e6, 1)} GW total",
         fontsize=13,
     )
     fig.tight_layout()

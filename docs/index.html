@@ -585,10 +585,14 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
         <h2>Offshore wind</h2>
         <p>
           Germany's offshore wind fleet at 2026-05-01: 1 732 turbines, 10.4 GW
-          total — 7.4 GW in the Nordsee, 1.8 GW in the Ostsee. Coordinates in
-          MaStR are anonymised for offshore (<code>StandortAnonymisiert</code>
-          starts with "Nordsee" or "Ostsee"), so we group by operator
-          rather than placing turbines on a map.
+          total — 8.6 GW in the Nordsee, 1.8 GW in the Ostsee. The
+          <code>StandortAnonymisiert</code> field carries a sea label
+          ("Nordsee…" / "Ostsee…"), but the actual
+          <code>Laengengrad</code> / <code>Breitengrad</code> coordinates
+          are real (verified across all 1 909 offshore rows). Offshore
+          points still fall outside every Kreis polygon, so they don't
+          contribute to per-Kreis aggregations — we group by operator
+          instead.
         </p>
         <figure>
           <object type="image/svg+xml" data="assets/sample-offshore-windparks.svg" aria-label="Top offshore wind operators"></object>
@@ -690,11 +694,15 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
             legend.
           </li>
           <li>
-            <b>Offshore coordinates are anonymized.</b> Records flagged
-            <code>WindAnLandOderSeeId == 889</code> carry a
+            <b>Offshore coordinates are real, despite the label.</b>
+            Records flagged <code>WindAnLandOderSeeId == 889</code> carry a
             <code>StandortAnonymisiert</code> string ("Nordsee…" / "Ostsee…")
-            instead of real lat/lon. The notebook places them in synthetic sea
-            rectangles, not their real positions.
+            <em>and</em> a real <code>Laengengrad</code> /
+            <code>Breitengrad</code>. The original notebook draws them in
+            synthetic sea rectangles anyway — that workaround was based on a
+            wrong assumption about anonymisation; you can drop it if you want
+            point-accurate offshore rendering. Spatial join to Kreis polygons
+            still excludes them (no Kreis covers open sea).
           </li>
           <li>
             <b>Timezone discipline.</b> <code>parse_dotnet_date</code> returns
