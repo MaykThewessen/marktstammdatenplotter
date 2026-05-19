@@ -365,14 +365,22 @@ def load_from_bulk(
             " / storage.parquet under BNetzA_MaStR/."
         )
 
+    # Prefer the merged historical+delta `full-*.parquet` when present;
+    # fall back to the bare Zenodo-snapshot file otherwise.
     if tech == "pv":
-        path = chosen / "solar.parquet"
+        path = chosen / "full-solar.parquet"
+        if not path.exists():
+            path = chosen / "solar.parquet"
         energy_type = "Solare Strahlungsenergie"
     elif tech == "wind":
-        path = chosen / "wind.parquet"
+        path = chosen / "full-wind.parquet"
+        if not path.exists():
+            path = chosen / "wind.parquet"
         energy_type = "Wind"
     elif tech == "bess":
-        path = chosen / "storage.parquet"
+        path = chosen / "full-storage.parquet"
+        if not path.exists():
+            path = chosen / "storage.parquet"
         energy_type = "Speicher"
     else:
         raise ValueError(f"unknown tech: {tech!r}")

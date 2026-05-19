@@ -19,6 +19,11 @@ fig/frames-bess/
 # BESS scrape (heavy, regenerable)
 data-bess/
 
+# Incremental JSON-API delta scrape (regenerable via scripts/scrape_delta.py)
+data-delta-pv/
+data-delta-bess/
+data-delta-wind/
+
 # open-MaStR Zenodo bulk dump (regenerable from Zenodo record 14783581)
 BNetzA_MaStR/
 

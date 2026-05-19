@@ -12,6 +12,7 @@ and mirrors them into docs/assets/.
 from __future__ import annotations
 
 import sys
+import warnings
 from datetime import date
 from pathlib import Path
 
@@ -1188,7 +1189,7 @@ def main():
 
     # BESS slice lives in its own data-bess/ dir; render only if present.
     try:
-        bess_df, _ = mastr_plot.load_bess()
+        bess_df, _ = mastr_plot.load_bess(prefer_bulk=False)
     except FileNotFoundError:
         print("BESS scrape not present — skipping BESS / PSH charts.")
     else:
@@ -1222,7 +1223,161 @@ def main():
                 out_top="sample-psh-top.svg",
             )
 
+    # GWh trajectory chart uses the Zenodo bulk dump for complete historical
+    # coverage (the 200k JSON-API cap misses ~1.5M older home batteries).
+    render_bess_gwh_trajectory("sample-bess-gwh-trajectory.svg")
+
     print("Sample renders complete.")
+
+
+def render_bess_gwh_trajectory(out_name: str) -> None:
+    """Cumulative BESS GWh by sector — historical (Zenodo bulk) + planned forward zone.
+
+    Why not use the 200k JSON scrape for history?
+    The MaStR API sorts by commissioning date desc, so the 200k cap keeps only
+    the ~2021-2026 tail and drops ~1.5M older home batteries. The Zenodo bulk
+    (~1.75M rows) is required for accurate sector-level GWh history.
+
+    The remaining gap vs battery-charts.de (21 GWh HSS vs ~15 GWh here) is
+    MaStR under-registration: ~20-40% of residential batteries are never
+    reported (Figgener et al. 2024).
+    """
+    bulk_dir = mastr_plot.find_bulk_dir()
+    if bulk_dir is None or not (bulk_dir / "storage.parquet").exists():
+        print("Bulk storage.parquet not found — skipping GWh trajectory chart.")
+        return
+
+    df = pd.read_parquet(bulk_dir / "storage.parquet")
+    b = df[df["storage_technology"] == "Batterie"].copy()
+
+    # Classify by usable energy into HSS / CSS / LSS (battery-charts.de thresholds).
+    def _sector(kwh):
+        if pd.isna(kwh) or kwh <= 0:
+            return None
+        if kwh < 30:
+            return "HSS (<30 kWh)"
+        if kwh < 1000:
+            return "CSS (30 kWh – 1 MWh)"
+        return "LSS (≥1 MWh)"
+
+    b["_sector"] = b["usable_capacity_kwh"].apply(_sector)
+    b = b[b["_sector"].notna()].copy()
+
+    SECTORS = ["HSS (<30 kWh)", "CSS (30 kWh – 1 MWh)", "LSS (≥1 MWh)"]
+    COLORS_HIST = ["#86efac", "#fbbf24", "#a78bfa"]
+    COLORS_PLAN = ["#bbf7d0", "#fde68a", "#ddd6fe"]
+
+    # --- Historical: commissioned units from 2013 onwards ---
+    hist = b[
+        b["commissioning_date"].notna()
+        & (b["commissioning_date"] >= pd.Timestamp("2013-01-01", tz="UTC"))
+    ].copy()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        hist["_month"] = hist["commissioning_date"].dt.to_period("M")
+    monthly_h = (
+        hist.groupby(["_month", "_sector"])["usable_capacity_kwh"]
+        .sum()
+        .unstack(fill_value=0.0)
+        .div(1e6)
+    )
+    for s in SECTORS:
+        if s not in monthly_h.columns:
+            monthly_h[s] = 0.0
+    monthly_h = monthly_h[SECTORS]
+    full_idx = pd.period_range(monthly_h.index.min(), monthly_h.index.max(), freq="M")
+    monthly_h = monthly_h.reindex(full_idx, fill_value=0.0)
+    cumhist = monthly_h.cumsum()
+    last_date = cumhist.index.max()
+    last_vals = cumhist.iloc[-1].copy()
+
+    # --- Planned: entries with planned date but no commissioning date ---
+    future = b[
+        b["commissioning_date"].isna()
+        & b["planned_commissioning_date"].notna()
+        & b["decommissioning_date"].isna()
+        & (b["planned_commissioning_date"] > last_date.to_timestamp().tz_localize("UTC"))
+        & (b["planned_commissioning_date"] <= pd.Timestamp("2030-12-31", tz="UTC"))
+    ].copy()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        future["_month"] = future["planned_commissioning_date"].dt.to_period("M")
+    has_future = len(future) > 0
+    if has_future:
+        monthly_f = (
+            future.groupby(["_month", "_sector"])["usable_capacity_kwh"]
+            .sum()
+            .unstack(fill_value=0.0)
+            .div(1e6)
+        )
+        for s in SECTORS:
+            if s not in monthly_f.columns:
+                monthly_f[s] = 0.0
+        monthly_f = monthly_f[SECTORS]
+        fut_idx = pd.period_range(monthly_f.index.min(), monthly_f.index.max(), freq="M")
+        monthly_f = monthly_f.reindex(fut_idx, fill_value=0.0)
+        cumfut = monthly_f.cumsum() + last_vals.values
+        # Prepend the last historical row so lines/areas connect cleanly.
+        join_row = pd.DataFrame([last_vals.values], columns=SECTORS,
+                                index=pd.PeriodIndex([last_date], freq="M"))
+        cumfut = pd.concat([join_row, cumfut])
+
+    # --- Plot ---
+    fig, ax = plt.subplots(figsize=(13, 5.5), dpi=120)
+
+    hist_ts = cumhist.copy()
+    hist_ts.index = cumhist.index.to_timestamp()
+
+    # Stacked historical areas.
+    bottoms = np.zeros(len(hist_ts))
+    for s, c in zip(SECTORS, COLORS_HIST):
+        vals = hist_ts[s].values
+        ax.fill_between(hist_ts.index, bottoms, bottoms + vals,
+                        color=c, alpha=0.85, label=s)
+        bottoms += vals
+
+    # Stacked planned areas (lighter, hatched).
+    if has_future:
+        fut_ts = cumfut.copy()
+        fut_ts.index = cumfut.index.to_timestamp()
+        bottoms_f = np.zeros(len(fut_ts))
+        for s, c in zip(SECTORS, COLORS_PLAN):
+            vals_f = fut_ts[s].values
+            ax.fill_between(fut_ts.index, bottoms_f, bottoms_f + vals_f,
+                            color=c, alpha=0.55, hatch="///",
+                            label=f"{s.split('(')[0].strip()} — planned")
+            bottoms_f += vals_f
+        ax.axvline(last_date.to_timestamp(), color="#6b7280",
+                   linewidth=1.0, linestyle=":", alpha=0.8)
+        ax.text(last_date.to_timestamp(), ax.get_ylim()[1] * 0.5,
+                "  MaStR\n  bulk\n  cutoff", color="#6b7280", fontsize=7.5, va="center")
+
+    # Snap date marker.
+    snap_ts = SNAP.to_pydatetime()
+    ax.axvline(snap_ts, color="#dc2626", linewidth=1.5, linestyle="--", alpha=0.8)
+    ymax = ax.get_ylim()[1]
+    ax.text(snap_ts, ymax * 0.97,
+            f" {SNAP.date()}", color="#dc2626", fontsize=8.5, va="top")
+
+    total_hist = last_vals.sum()
+    ax.set_ylabel("Cumulative installed GWh (usable)")
+    ax.set_xlabel("")
+    ax.set_title(
+        "Germany BESS — cumulative installed energy by sector (MaStR Zenodo bulk dump)\n"
+        f"Registered: {total_hist:.1f} GWh  ·  "
+        "Market estimates ~21 GWh HSS (battery-charts.de / Figgener et al.) "
+        "— gap = ~20-40% of residential batteries never registered in MaStR",
+        fontsize=10,
+    )
+    ax.legend(loc="upper left", fontsize=8.5, ncol=2)
+    ax.grid(alpha=0.3)
+    ax.set_ylim(bottom=0)
+    fig.tight_layout()
+    for d in (FIG, DOCS):
+        fig.savefig(d / out_name, format="svg", bbox_inches="tight")
+    plt.close(fig)
+    print(f"  GWh trajectory: {total_hist:.1f} GWh historical"
+          + (f"  +{cumfut.sum(axis=1).iloc[-1] - total_hist:.1f} GWh planned" if has_future else ""))
 
 
 if __name__ == "__main__":
