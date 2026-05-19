@@ -652,6 +652,8 @@ def plot_choropleth(
     bins: list[float] | None = None,
     cmap: str = "viridis",
     scale: str = "jenks",
+    col: str = "power_gw",
+    legend_label: str = "Capacity [GW]",
 ):
     """Return a matplotlib Figure showing the choropleth.
 
@@ -667,29 +669,29 @@ def plot_choropleth(
     import matplotlib.colors as mcolors
 
     fig, ax = plt.subplots(figsize=(9, 11), dpi=120)
-    values = aggregated["power_gw"].to_numpy()
+    values = aggregated[col].to_numpy()
     vmax = float(values.max()) if values.size else 1.0
     if vmax <= 0:
         vmax = 1.0
 
     if scale == "linear":
         norm = mcolors.Normalize(vmin=0.0, vmax=vmax)
-        legend_kwds = {"label": "Capacity [GW]", "shrink": 0.6}
+        legend_kwds = {"label": legend_label, "shrink": 0.6}
     elif scale == "log":
         # symlog handles zeros gracefully without raising
         linthresh = max(vmax * 1e-3, 1e-4)
         norm = mcolors.SymLogNorm(linthresh=linthresh, vmin=0.0, vmax=vmax)
-        legend_kwds = {"label": "Capacity [GW] (log)", "shrink": 0.6}
+        legend_kwds = {"label": f"{legend_label} (log)", "shrink": 0.6}
     else:  # jenks
         if bins is None:
             bins = jenks_bins(values[values > 0]) if (values > 0).any() else [0.0, vmax]
         if len(bins) < 2:
             bins = [0.0, vmax]
         norm = mcolors.BoundaryNorm(bins, ncolors=256)
-        legend_kwds = {"label": "Capacity [GW]", "shrink": 0.6}
+        legend_kwds = {"label": legend_label, "shrink": 0.6}
 
     aggregated.plot(
-        column="power_gw", ax=ax, cmap=cmap, norm=norm,
+        column=col, ax=ax, cmap=cmap, norm=norm,
         edgecolor="white", linewidth=0.3, legend=True,
         legend_kwds=legend_kwds,
         missing_kwds={"color": "#eeeeee"},

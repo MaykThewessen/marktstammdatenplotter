@@ -54,8 +54,11 @@ PRESETS = {
         "basename": "bess-2005-may2026",
         "cmap": "BuPu",
         "noun": "units",
-        "title": "Installed battery storage power in Germany",
-        "extra_subtitle": " (top 200k by power)",
+        "title": "Installed battery storage energy in Germany",
+        "extra_subtitle": "",
+        "agg_col": "energy_gwh",
+        "agg_unit": "GWh",
+        "legend_label": "Energy [GWh]",
     },
 }
 
@@ -85,9 +88,12 @@ def _aggregate(records, units, snap, cfg):
     return mastr_plot.aggregate_by_unit(records, units, snap, cfg["energy_type"])
 
 
-def _active_power_gw(active, cfg):
-    col = "power_kw" if cfg["kind"] == "bess" else "power"
-    return active[col].sum() / 1e6 if len(active) else 0.0
+def _active_total(active, cfg):
+    if cfg["kind"] == "bess":
+        src_col = "energy_kwh" if cfg.get("agg_col") == "energy_gwh" else "power_kw"
+    else:
+        src_col = "power"
+    return active[src_col].sum() / 1e6 if len(active) else 0.0
 
 
 def _noun_count(active, cfg):
@@ -101,21 +107,26 @@ def render_frames(records, units, cfg) -> tuple[int, Path]:
         if old.is_file():
             old.unlink()
 
+    agg_col = cfg.get("agg_col", "power_gw")
+    agg_unit = cfg.get("agg_unit", "GW")
+    legend_label = cfg.get("legend_label", "Capacity [GW]")
+
     dates = snapshot_dates()
     agg_max, _ = _aggregate(records, units, dates[-1], cfg)
-    positive = agg_max["power_gw"][agg_max["power_gw"] > 0].to_numpy()
+    positive = agg_max[agg_col][agg_max[agg_col] > 0].to_numpy()
     bins = mastr_plot.jenks_bins(positive, k=8)
 
     idx = 0
     for snap in dates:
         agg, active = _aggregate(records, units, snap, cfg)
-        total_gw = _active_power_gw(active, cfg)
+        total = _active_total(active, cfg)
         title = (
             f"{cfg['title']} — {snap.isoformat()}\n"
-            f"{_noun_count(active, cfg)} · {round(total_gw, 1)} GW"
+            f"{_noun_count(active, cfg)} · {round(total, 1)} {agg_unit}"
         )
         fig = mastr_plot.plot_choropleth(
             agg, snap, title, bins=bins, cmap=cfg["cmap"],
+            col=agg_col, legend_label=legend_label,
         )
         # Lossless WebP via Pillow under the hood. Smaller than PNG at the
         # same dpi and natively read by ffmpeg's webp decoder.
