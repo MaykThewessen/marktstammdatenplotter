@@ -35,7 +35,8 @@ db-mastr-wind    = "python -c \"from open_mastr import Mastr; Mastr().download(d
 db-mastr-solar   = "python -c \"from open_mastr import Mastr; Mastr().download(data=['solar'])\""
 db-mastr-storage = "python -c \"from open_mastr import Mastr; Mastr().download(data=['storage'])\""
 db-mastr-market  = "python -c \"from open_mastr import Mastr; Mastr().download(data=['market'])\""
-db-mastr-core    = "python -c \"from open_mastr import Mastr; Mastr().download(data=['wind','solar','storage','market'])\""
+db-mastr-storage-units = "python -c \"from open_mastr import Mastr; Mastr().download(data=['storage_units'])\""
+db-mastr-core    = "python -c \"from open_mastr import Mastr; Mastr().download(data=['wind','solar','storage','storage_units','market'])\""
 db-mastr-all     = "python -c \"from open_mastr import Mastr; Mastr().download()\""
 
 # One-shot scrapes — uses the README's curl recipes.
