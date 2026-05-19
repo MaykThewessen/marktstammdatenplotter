@@ -5,11 +5,12 @@
 
 | Wind | PV (≥ 49 kW) |
 |---|---|
-| ![Wind capacity 2005→2025](fig/wind-2005-2025.gif) | ![PV capacity 2005→2025](fig/pv-2005-2025.gif) |
+| ![Wind capacity 2005→May 2026](fig/wind-2005-may2026.gif) | ![PV capacity 2005→May 2026](fig/pv-2005-may2026.gif) |
 
-*Installed wind (left, 42 495 turbines / 63 GW) and PV (right, top 200 000
-plants ≥ 49 kW / 58 GW) capacity per Kreis, 2005 → 2025. 21 yearly frames from
-the live registry, fixed Jenks bins so colors stay comparable across years.*
+*Installed wind (left) and PV (right, top 200 000 plants ≥ 49 kW) capacity
+per Kreis, 2005 → May 2026. 22 yearly frames plus a final May 2026 YTD
+snapshot from the live registry. Fixed Jenks bins so colors stay comparable
+across years.*
 
 [![Docs](https://img.shields.io/badge/docs-github.io-blue?logo=github)](https://maykthewessen.github.io/marktstammdatenplotter/)
 [![Refresh CI](https://github.com/MaykThewessen/marktstammdatenplotter/actions/workflows/refresh-docs.yml/badge.svg)](https://github.com/MaykThewessen/marktstammdatenplotter/actions/workflows/refresh-docs.yml)

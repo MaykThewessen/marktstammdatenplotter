@@ -10,6 +10,15 @@ All notable changes to this project. Follows
 - Solar PV orientation analysis (capacity-weighted facing + tilt distribution).
 - Wind turbine age histogram + repowering signal + upsizing curve.
 - `CHANGELOG.md` (this file) and `CONTRIBUTING.md`.
+- Animation GIFs extended past year-end: final frame now at 2026-05-01
+  captures YTD additions (4 981 new plants registered in 2026 alone).
+  New filenames `wind-2005-may2026.gif` + `pv-2005-may2026.gif`;
+  `snapshot_dates()` helper makes the cap configurable in one place.
+
+### Changed
+- Renamed: `wind-2005-2025.gif` → `wind-2005-may2026.gif`,
+  `pv-2005-2025.gif` → `pv-2005-may2026.gif`. README + docs/index.html
+  + OpenGraph meta tags updated.
 
 ## [0.5.0] — 2026-05-18
 

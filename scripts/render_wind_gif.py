@@ -29,7 +29,7 @@ PRESETS = {
         "energy_type": "Wind",
         "frame_prefix": "wind",
         "frames_dir": "fig/frames",
-        "gif_name": "wind-2005-2025.gif",
+        "gif_name": "wind-2005-may2026.gif",
         "cmap": "GnBu",
         "noun": "turbines",
         "title": "Installed wind capacity in Germany",
@@ -39,7 +39,7 @@ PRESETS = {
         "energy_type": "Solare Strahlungsenergie",
         "frame_prefix": "pv",
         "frames_dir": "fig/frames-pv",
-        "gif_name": "pv-2005-2025.gif",
+        "gif_name": "pv-2005-may2026.gif",
         "cmap": "YlOrRd",
         "noun": "plants",
         "title": "Installed PV capacity in Germany",
@@ -48,8 +48,17 @@ PRESETS = {
 }
 
 START_YEAR = 2005
-END_YEAR = 2025
+END_YEAR = 2025          # last full year-start frame
+FINAL_FRAME = date(2026, 5, 1)   # extra frame past END_YEAR for YTD signal
 HOLD_FRAMES = 9
+
+
+def snapshot_dates() -> list[date]:
+    """Yearly Jan-1 frames from START_YEAR through END_YEAR, plus FINAL_FRAME."""
+    dates = [date(y, 1, 1) for y in range(START_YEAR, END_YEAR + 1)]
+    if FINAL_FRAME and FINAL_FRAME > dates[-1]:
+        dates.append(FINAL_FRAME)
+    return dates
 
 
 def render_frames(records, units, cfg) -> tuple[int, Path]:
@@ -58,15 +67,15 @@ def render_frames(records, units, cfg) -> tuple[int, Path]:
     for old in frames.glob(f"{cfg['frame_prefix']}-*.png"):
         old.unlink()
 
+    dates = snapshot_dates()
     agg_max, _ = mastr_plot.aggregate_by_unit(
-        records, units, date(END_YEAR, 12, 31), cfg["energy_type"]
+        records, units, dates[-1], cfg["energy_type"]
     )
     positive = agg_max["power_gw"][agg_max["power_gw"] > 0].to_numpy()
     bins = mastr_plot.jenks_bins(positive, k=8)
 
     idx = 0
-    for year in range(START_YEAR, END_YEAR + 1):
-        snap = date(year, 1, 1)
+    for snap in dates:
         agg, active = mastr_plot.aggregate_by_unit(records, units, snap, cfg["energy_type"])
         title = (
             f"{cfg['title']} — {snap.isoformat()}\n"
