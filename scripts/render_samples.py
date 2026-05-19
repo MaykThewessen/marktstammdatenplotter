@@ -1448,7 +1448,7 @@ def render_bundesland_chart(records, units, out_name):
     ax.set_xlabel("Installed capacity [GW]")
     ax.set_title(
         f"Installed capacity by Bundesland — {SNAP.date()}\n"
-        "(MaStR · wind: full · PV: top-50k ≥200 kW)"
+        "(MaStR · full registry)"
     )
     ax.legend(loc="lower right")
     ax.grid(axis="x", alpha=0.3)
@@ -1468,7 +1468,7 @@ def main():
 
     render_map(
         records, units, "Solare Strahlungsenergie",
-        title_prefix="PV ≥200 kW",
+        title_prefix="PV",
         cmap="YlOrRd",
         out_name="sample-pv-map.svg",
     )
@@ -1502,7 +1502,7 @@ def main():
     render_density_map(records, units, "Wind", "GnBu",
                        "sample-wind-density.svg", "Wind capacity density")
     render_density_map(records, units, "Solare Strahlungsenergie", "YlOrRd",
-                       "sample-pv-density.svg", "PV capacity density (≥49 kW)")
+                       "sample-pv-density.svg", "PV capacity density")
     export_largest_plants(records, units, "largest-plants.json")
     render_pv_orientation(records, "sample-pv-orientation.svg")
     render_pv_orientation_polar("sample-pv-orientation-polar.svg")
@@ -1523,7 +1523,7 @@ def main():
         records, "Solare Strahlungsenergie",
         palette=["#fef3c7", "#fed7aa", "#fdba74", "#fb923c",
                  "#ea580c", "#9a3412", "#7c2d12"],
-        tech_label="PV (top-200k slice)", noun="plants",
+        tech_label="PV", noun="plants",
         out_name="sample-pv-by-size.svg",
     )
 
