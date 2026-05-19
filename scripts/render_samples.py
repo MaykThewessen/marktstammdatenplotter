@@ -52,7 +52,8 @@ def render_map(records, units, energy_type, title_prefix, cmap, out_name):
     plt.close(fig)
 
 
-def render_growth(records, energy_type, label, color_fill, color_line, out_name):
+def render_growth(records, energy_type, label, color_fill, color_line, out_name,
+                  xlim_start="2000-01-01"):
     sub = records[records["energy_type"] == energy_type].copy()
     monthly = (
         sub.assign(month=sub["install_date"].dt.to_period("M"))
@@ -62,6 +63,7 @@ def render_growth(records, energy_type, label, color_fill, color_line, out_name)
     fig, ax = plt.subplots(figsize=(9, 3.5), dpi=120)
     ax.fill_between(monthly.index, monthly.values, color=color_fill, alpha=0.35)
     ax.plot(monthly.index, monthly.values, color=color_line, linewidth=2)
+    ax.set_xlim(left=pd.Timestamp(xlim_start))
     ax.set_ylabel(f"Cumulative {label} [GW]")
     ax.set_title(f"Cumulative {label} capacity over time")
     ax.grid(alpha=0.3)
@@ -414,6 +416,305 @@ def render_pv_orientation(records, out_name):
     plt.close(fig)
 
 
+def render_pv_orientation_polar(out_name):
+    """Polar heatmap: PV capacity by compass orientation & commissioning year.
+
+    Reads BNetzA_MaStR/solar.parquet directly (needs the `orientation` column
+    which is not present in the mastr_plot records DataFrame).  Skips silently
+    if the parquet is not on disk.
+    """
+    from scipy.interpolate import interp1d
+
+    parquet = ROOT / "BNetzA_MaStR" / "solar.parquet"
+    if not parquet.exists():
+        print(f"render_pv_orientation_polar: {parquet} not found — skipping.")
+        return
+
+    df = pd.read_parquet(
+        parquet,
+        columns=["orientation", "installed_capacity_kw", "commissioning_date", "status"],
+    )
+    active = df[df["status"] == "In Betrieb"].dropna(
+        subset=["commissioning_date", "orientation"]
+    )
+    active = active.assign(year=active["commissioning_date"].dt.year.astype("Int64"))
+    active = active[active["year"].between(2000, 2025)]
+
+    MASTR_NAMES = {
+        "N": "Nord", "NO": "Nord-Ost", "O": "Ost", "SO": "Süd-Ost",
+        "S": "Süd", "SW": "Süd-West", "W": "West", "NW": "Nord-West",
+    }
+    FULL_NAMES = {
+        "N": "Nord", "NO": "NO", "O": "Ost", "SO": "SO",
+        "S": "Süd", "SW": "SW", "W": "West", "NW": "NW",
+    }
+    LABELS = list(MASTR_NAMES.keys())
+    DEGREES = [0, 45, 90, 135, 180, 225, 270, 315]
+
+    ow = active[active["orientation"] == "Ost-West"].copy()
+    ow_half = ow.assign(installed_capacity_kw=ow["installed_capacity_kw"] / 2)
+
+    rows = {}
+    for code, name in MASTR_NAMES.items():
+        rows[code] = active[active["orientation"] == name][
+            ["year", "installed_capacity_kw"]
+        ]
+    rows["O"] = pd.concat([rows["O"], ow_half[["year", "installed_capacity_kw"]]])
+    rows["W"] = pd.concat([rows["W"], ow_half[["year", "installed_capacity_kw"]]])
+
+    years = list(range(2000, 2026))
+    matrix = np.zeros((len(years), len(LABELS)))
+    for j, code in enumerate(LABELS):
+        grouped = rows[code].groupby("year")["installed_capacity_kw"].sum() / 1e6
+        for i, yr in enumerate(years):
+            matrix[i, j] = grouped.get(yr, 0.0)
+
+    N_THETA = 720
+    theta_fine_deg = np.linspace(0, 360, N_THETA, endpoint=False)
+    deg_arr = np.array(DEGREES, dtype=float)
+
+    matrix_smooth = np.zeros((len(years), N_THETA))
+    for i in range(len(years)):
+        vals = matrix[i, :]
+        deg_wrap = np.append(deg_arr, deg_arr[0] + 360.0)
+        vals_wrap = np.append(vals, vals[0])
+        f = interp1d(deg_wrap, vals_wrap, kind="cubic")
+        matrix_smooth[i, :] = np.clip(f(theta_fine_deg), 0, None)
+
+    theta_edges = np.deg2rad(np.linspace(0, 360, N_THETA + 1))
+    r_edges = np.array(years + [2026], dtype=float)
+    THETA, R = np.meshgrid(theta_edges, r_edges)
+
+    import matplotlib.colors as mcolors
+    from matplotlib.cm import ScalarMappable
+
+    cmap = mcolors.LinearSegmentedColormap.from_list(
+        "green_yellow_red", ["#006400", "#32cd32", "#ffff00", "#ff4500", "#8b0000"]
+    )
+    norm = mcolors.Normalize(vmin=0, vmax=matrix_smooth.max())
+
+    fig = plt.figure(figsize=(12, 12), facecolor="#0d0d0d")
+    ax = fig.add_subplot(111, projection="polar")
+    ax.set_facecolor("#0d0d0d")
+    ax.set_theta_zero_location("N")
+    ax.set_theta_direction(-1)
+
+    ax.pcolormesh(THETA, R, matrix_smooth, cmap=cmap, norm=norm,
+                  shading="flat", rasterized=True)
+
+    ax.set_ylim(r_edges[0], r_edges[-1])
+    ax.set_yticks(years[::5])
+    ax.set_yticklabels(
+        [str(y) for y in years[::5]], fontsize=7.5, color="white", fontfamily="monospace"
+    )
+    ax.set_rlabel_position(8)
+
+    tick_degs = np.arange(0, 360, 30)
+    ax.set_xticks(np.deg2rad(tick_degs))
+    ax.set_xticklabels([f"{d}°" for d in tick_degs], fontsize=8.5, color="white")
+    ax.tick_params(axis="x", pad=8, colors="white")
+
+    for yr in years[::5]:
+        theta_ring = np.linspace(0, 2 * np.pi, 500)
+        ax.plot(theta_ring, [yr] * 500, color="white", lw=0.4, alpha=0.35)
+
+    COMPASS_LABELS = {
+        0: "Nord", 90: "Ost", 180: "Süd", 270: "West",
+        45: "NO", 135: "SO", 225: "SW", 315: "NW",
+    }
+    for deg, lbl in COMPASS_LABELS.items():
+        bold = deg % 90 == 0
+        ax.text(
+            np.deg2rad(deg), 2027, lbl,
+            ha="center", va="center",
+            fontsize=10 if bold else 8,
+            fontweight="bold" if bold else "normal",
+            color="white",
+        )
+
+    total_per_dir = matrix.sum(axis=0)
+    for j, (code, deg) in enumerate(zip(LABELS, DEGREES)):
+        gw = total_per_dir[j]
+        ax.text(
+            np.deg2rad(deg), 2024.5,
+            f"{gw:.0f} GW" if gw >= 10 else f"{gw:.1f}",
+            ha="center", va="center", fontsize=6.5, color="white", alpha=0.85,
+        )
+
+    theta_border = np.linspace(0, 2 * np.pi, 600)
+    ax.plot(theta_border, [r_edges[-1]] * 600, color="white", lw=1.2, alpha=0.7)
+
+    cbar = fig.colorbar(
+        ScalarMappable(norm=norm, cmap=cmap),
+        ax=ax, pad=0.08, fraction=0.025, aspect=35, shrink=0.7,
+    )
+    cbar.set_label("GW commissioned per year", fontsize=9, color="white", labelpad=8)
+    cbar.ax.tick_params(labelsize=8, colors="white")
+    plt.setp(cbar.ax.yaxis.get_ticklines(), color="white")
+
+    total_gw_all = matrix.sum()
+    peak_yr = years[int(np.argmax(matrix.sum(axis=1)))]
+    ax.set_title(
+        f"German PV — capacity by orientation & commissioning year\n"
+        f"MaStR · {total_gw_all:.0f} GW total · peak year: {peak_yr}",
+        fontsize=12, pad=24, color="white",
+    )
+
+    plt.tight_layout()
+    for d in (FIG, DOCS):
+        fig.savefig(d / out_name, format="svg", bbox_inches="tight",
+                    facecolor="#0d0d0d")
+    plt.close(fig)
+
+
+def render_pv_orientation_polar_snapshot(out_name):
+    """Polar rose: total PV capacity by compass orientation at SNAP date.
+
+    Single-state snapshot (no time axis). Radial axis = GW installed.
+    Smooth cubic interpolation between 8 compass directions → full 360° fill.
+    Reads BNetzA_MaStR/solar.parquet directly.
+    """
+    from scipy.interpolate import interp1d
+    import matplotlib.colors as mcolors
+    from matplotlib.cm import ScalarMappable
+
+    parquet = ROOT / "BNetzA_MaStR" / "solar.parquet"
+    if not parquet.exists():
+        print(f"render_pv_orientation_polar_snapshot: {parquet} not found — skipping.")
+        return
+
+    snap = SNAP.tz_localize("UTC") if SNAP.tzinfo is None else SNAP
+    df = pd.read_parquet(
+        parquet,
+        columns=["orientation", "installed_capacity_kw",
+                 "commissioning_date", "decommissioning_date"],
+    )
+    active = df[
+        (df["commissioning_date"] <= snap)
+        & (df["decommissioning_date"].isna() | (df["decommissioning_date"] > snap))
+    ].dropna(subset=["orientation"])
+
+    MASTR_NAMES = {
+        "N": "Nord", "NO": "Nord-Ost", "O": "Ost", "SO": "Süd-Ost",
+        "S": "Süd", "SW": "Süd-West", "W": "West", "NW": "Nord-West",
+    }
+    DEGREES = [0, 45, 90, 135, 180, 225, 270, 315]
+    LABELS = list(MASTR_NAMES.keys())
+
+    ow = active[active["orientation"] == "Ost-West"]
+    gw_by_dir = {}
+    for code, name in MASTR_NAMES.items():
+        sub = active[active["orientation"] == name]
+        gw_by_dir[code] = sub["installed_capacity_kw"].sum() / 1e6
+    gw_by_dir["O"] += ow["installed_capacity_kw"].sum() / 1e6 / 2
+    gw_by_dir["W"] += ow["installed_capacity_kw"].sum() / 1e6 / 2
+
+    tracker_gw = active[active["orientation"] == "nachgeführt"]["installed_capacity_kw"].sum() / 1e6
+    total_gw = sum(gw_by_dir.values()) + tracker_gw
+
+    gw_vals = np.array([gw_by_dir[c] for c in LABELS])
+    deg_arr = np.array(DEGREES, dtype=float)
+
+    # Smooth circular interpolation → 1440 theta points
+    N_THETA = 1440
+    theta_fine_deg = np.linspace(0, 360, N_THETA, endpoint=False)
+    deg_wrap = np.append(deg_arr, deg_arr[0] + 360.0)
+    gw_wrap = np.append(gw_vals, gw_vals[0])
+    f = interp1d(deg_wrap, gw_wrap, kind="cubic")
+    gw_smooth = np.clip(f(theta_fine_deg), 0, None)
+
+    theta_rad = np.deg2rad(theta_fine_deg)
+    # Close the curve
+    theta_closed = np.append(theta_rad, theta_rad[0])
+    gw_closed = np.append(gw_smooth, gw_smooth[0])
+
+    # Colormap: map GW value → color
+    cmap = mcolors.LinearSegmentedColormap.from_list(
+        "green_yellow_red", ["#006400", "#32cd32", "#ffff00", "#ff4500", "#8b0000"]
+    )
+    norm = mcolors.Normalize(vmin=0, vmax=gw_vals.max())
+
+    fig = plt.figure(figsize=(11, 11), facecolor="#0d0d0d")
+    ax = fig.add_subplot(111, projection="polar")
+    ax.set_facecolor("#0d0d0d")
+    ax.set_theta_zero_location("N")
+    ax.set_theta_direction(-1)
+
+    # Fill with gradient: draw many thin wedges coloured by local GW value
+    for i in range(N_THETA):
+        t0 = theta_rad[i]
+        t1 = theta_rad[(i + 1) % N_THETA]
+        r = gw_smooth[i]
+        color = cmap(norm(r))
+        ax.fill_between([t0, t1], 0, [r, r], color=color, linewidth=0)
+
+    # Outline curve
+    ax.plot(theta_closed, gw_closed, color="white", lw=1.0, alpha=0.7)
+
+    # Radial grid lines
+    gw_max = gw_vals.max()
+    r_ticks = [10, 20, 30, 40, 50]
+    r_ticks = [r for r in r_ticks if r <= gw_max * 1.1]
+    for r in r_ticks:
+        ring = np.linspace(0, 2 * np.pi, 500)
+        ax.plot(ring, [r] * 500, color="white", lw=0.3, alpha=0.25, linestyle="--")
+        ax.text(np.deg2rad(15), r, f"{r} GW",
+                fontsize=6.5, color="white", alpha=0.6, va="bottom")
+
+    # Compass labels + GW values at each direction
+    COMPASS_FULL = {
+        0: "Nord", 45: "NO", 90: "Ost", 135: "SO",
+        180: "Süd", 225: "SW", 270: "West", 315: "NW",
+    }
+    for code, deg in zip(LABELS, DEGREES):
+        gw = gw_by_dir[code]
+        bold = deg % 90 == 0
+        r_label = gw_max * 1.15
+        ax.text(
+            np.deg2rad(deg), r_label,
+            COMPASS_FULL[deg],
+            ha="center", va="center",
+            fontsize=11 if bold else 8.5,
+            fontweight="bold" if bold else "normal",
+            color="white",
+        )
+        ax.text(
+            np.deg2rad(deg), gw_max * 1.05,
+            f"{gw:.1f} GW",
+            ha="center", va="center",
+            fontsize=7.5, color=cmap(norm(gw)), fontweight="bold",
+        )
+
+    ax.set_ylim(0, gw_max * 1.25)
+    ax.set_yticks([])
+    tick_degs = np.arange(0, 360, 30)
+    ax.set_xticks(np.deg2rad(tick_degs))
+    ax.set_xticklabels([f"{d}°" for d in tick_degs], fontsize=7.5, color="#aaa")
+    ax.tick_params(axis="x", pad=6)
+
+    # Colorbar
+    cbar = fig.colorbar(
+        ScalarMappable(norm=norm, cmap=cmap),
+        ax=ax, pad=0.09, fraction=0.025, aspect=35, shrink=0.65,
+    )
+    cbar.set_label("Installed capacity [GW]", fontsize=9, color="white", labelpad=8)
+    cbar.ax.tick_params(labelsize=8, colors="white")
+    plt.setp(cbar.ax.yaxis.get_ticklines(), color="white")
+
+    ax.set_title(
+        f"German PV — orientation of installed capacity · {SNAP.date()}\n"
+        f"Active units · MaStR · {total_gw:.0f} GW total"
+        f" · trackers {tracker_gw:.2f} GW (excluded from rose)",
+        fontsize=11, pad=22, color="white",
+    )
+
+    plt.tight_layout()
+    for d in (FIG, DOCS):
+        fig.savefig(d / out_name, format="svg", bbox_inches="tight",
+                    facecolor="#0d0d0d")
+    plt.close(fig)
+
+
 def render_wind_age(records, out_name):
     """Installs vs. decommissions per year + turbine-MW upsizing trend."""
     wind = records[records["energy_type"] == "Wind"].copy()
@@ -671,12 +972,14 @@ def render_bess_sector_charts(bess_df, out_summary: str, out_growth: str,
     ].copy()
     df_h["month"] = df_h["install_date"].dt.to_period("M")
 
+    sector_order = list(reversed(mastr_plot.BESS_SECTORS))  # LSS, CSS, HSS
+
     def cum_pivot(col):
         piv = (
             df_h.groupby(["month", "sector"])[col]
                 .sum().div(1e6).unstack(fill_value=0).cumsum()
         )
-        piv = piv[[c for c in mastr_plot.BESS_SECTORS if c in piv.columns]]
+        piv = piv[[c for c in sector_order if c in piv.columns]]
         piv.index = piv.index.to_timestamp()
         return piv
 
@@ -699,7 +1002,7 @@ def render_bess_sector_charts(bess_df, out_summary: str, out_growth: str,
         ax.set_title(title)
         ax.legend(loc="upper left", fontsize=9)
         ax.grid(alpha=0.3)
-    fig.suptitle("Battery + storage build-out by sector — HSS / CSS / LSS",
+    fig.suptitle("Battery + storage build-out by sector — LSS / CSS / HSS",
                  fontsize=13)
     fig.tight_layout()
     for d in (FIG, DOCS):
@@ -973,21 +1276,16 @@ def render_bess_charts(bess_df, units, out_power: str, out_energy: str,
     monthly_p.index = monthly_p.index.to_timestamp()
     monthly_e.index = monthly_e.index.to_timestamp()
     fig, ax = plt.subplots(figsize=(11, 4.5), dpi=120)
-    ax2 = ax.twinx()
     ax.fill_between(monthly_p.index, monthly_p.values,
                     color="#a78bfa", alpha=0.35)
-    ax.plot(monthly_p.index, monthly_p.values, color="#6d28d9", linewidth=2.2)
-    ax2.plot(monthly_e.index, monthly_e.values,
-             color="#0ea5e9", linewidth=2.2, linestyle="--")
-    ax.set_ylabel("Cumulative power [GW]", color="#6d28d9")
-    ax2.set_ylabel("Cumulative energy [GWh]", color="#0ea5e9")
+    ax.plot(monthly_p.index, monthly_p.values, color="#6d28d9", linewidth=2.2,
+            label="Power [GW]")
+    ax.plot(monthly_e.index, monthly_e.values,
+            color="#0ea5e9", linewidth=2.2, linestyle="--", label="Energy [GWh]")
+    ax.set_ylabel("Cumulative GW / GWh")
     ax.set_title("Cumulative BESS power + energy capacity in Germany")
+    ax.legend(loc="upper left")
     ax.grid(alpha=0.3)
-    from matplotlib.lines import Line2D
-    ax.legend(handles=[
-        Line2D([0], [0], color="#6d28d9", linewidth=2, label="Power [GW]"),
-        Line2D([0], [0], color="#0ea5e9", linewidth=2, linestyle="--", label="Energy [GWh]"),
-    ], loc="upper left")
     fig.tight_layout()
     for d in (FIG, DOCS):
         fig.savefig(d / out_growth, format="svg", bbox_inches="tight")
@@ -1149,15 +1447,17 @@ def main():
     )
     render_growth(
         records, "Solare Strahlungsenergie",
-        label="PV (top 50k)",
+        label="PV",
         color_fill="#f59e0b", color_line="#b45309",
         out_name="sample-pv-growth.svg",
+        xlim_start="2005-01-01",
     )
     render_growth(
         records, "Wind",
         label="wind",
         color_fill="#86efac", color_line="#16a34a",
         out_name="sample-wind-growth.svg",
+        xlim_start="1995-01-01",
     )
     render_bundesland_chart(records, units, "sample-by-bundesland.svg")
     render_top_operators(records, "sample-top-operators.svg")
@@ -1172,6 +1472,8 @@ def main():
                        "sample-pv-density.svg", "PV capacity density (≥49 kW)")
     export_largest_plants(records, units, "largest-plants.json")
     render_pv_orientation(records, "sample-pv-orientation.svg")
+    render_pv_orientation_polar("sample-pv-orientation-polar.svg")
+    render_pv_orientation_polar_snapshot("sample-pv-orientation-polar-snapshot.svg")
     render_wind_age(records, "sample-wind-age.svg")
 
     # Wind: aggregate per project (owner_name proxy for SPV / Windpark)

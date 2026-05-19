@@ -146,6 +146,27 @@ South-facing dominates at 62 % of installed PV; east-west flat-mount (utility
 parks) is the strong second at 14 %. Trackers stay rare — only 0.5 GW. Most
 plants tilt 0–19° (flat utility footprints).
 
+#### Current fleet — orientation polar rose (May 2026)
+
+![PV orientation polar rose](fig/sample-pv-orientation-polar-snapshot.svg)
+
+Polar rose of total installed capacity at the snapshot date. Radial distance =
+GW. South (bottom) dominates at 54 GW — the elongated red lobe. SW and SO
+shoulders account for another ~22 GW combined. North-facing slivers are barely
+visible at under 1 GW each. Ost-West dual-pitch panels split 50/50 to the Ost
+and West lobes. Trackers (0.24 GW) excluded — no fixed azimuth.
+
+#### Orientation × commissioning year — polar heatmap
+
+![PV orientation polar heatmap](fig/sample-pv-orientation-polar.svg)
+
+Each ring = one commissioning year (2000 → 2025, inner → outer). Color =
+GW commissioned that year in that compass direction. South (bottom) is 54 GW
+cumulative — roughly 70× more than North. The outer rings are darkest: the
+post-2020 build-out dominated by large ground-mount arrays, which still skew
+strongly south-facing. East-West split panels contribute to the Ost and West
+sectors (capacity divided 50/50). Ost-West tracking (`nachgeführt`) excluded.
+
 ### Wind fleet age + repowering
 
 ![Wind age](fig/sample-wind-age.svg)
