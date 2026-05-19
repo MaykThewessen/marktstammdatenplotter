@@ -57,6 +57,14 @@
   },
   {
     "tech": "PV",
+    "mw": 102.29,
+    "owner": "None",
+    "kreis": "B\u00f6rde",
+    "bundesland": "Sachsen-Anhalt",
+    "install_year": 2025
+  },
+  {
+    "tech": "PV",
     "mw": 88.68,
     "owner": "None",
     "kreis": "Ludwigslust-Parchim",
@@ -65,19 +73,11 @@
   },
   {
     "tech": "PV",
-    "mw": 82.98,
+    "mw": 86.92,
     "owner": "None",
-    "kreis": "Friesland",
-    "bundesland": "Niedersachsen",
-    "install_year": 2024
-  },
-  {
-    "tech": "PV",
-    "mw": 82.92,
-    "owner": "None",
-    "kreis": "Ludwigslust-Parchim",
-    "bundesland": "Mecklenburg-Vorpommern",
-    "install_year": 2021
+    "kreis": "Havelland",
+    "bundesland": "Brandenburg",
+    "install_year": 2025
   },
   {
     "tech": "Wind",
@@ -85,14 +85,14 @@
     "owner": "EnBW He Dreiht",
     "kreis": null,
     "bundesland": "Ausschlie\u00dfliche Wirtschaftszone",
-    "install_year": null
+    "install_year": 2026
   },
   {
     "tech": "Wind",
     "mw": 15.0,
-    "owner": "Nordseecluster 1",
+    "owner": "NC 2",
     "kreis": null,
-    "bundesland": "Ausschlie\u00dfliche Wirtschaftszone",
+    "bundesland": "Nordsee (Ausschlie\u00dfliche Wirtschaftszone)",
     "install_year": null
   },
   {
@@ -100,7 +100,7 @@
     "mw": 15.0,
     "owner": "NC 2",
     "kreis": null,
-    "bundesland": "Ausschlie\u00dfliche Wirtschaftszone",
+    "bundesland": "Nordsee (Ausschlie\u00dfliche Wirtschaftszone)",
     "install_year": null
   },
   {
@@ -108,7 +108,7 @@
     "mw": 15.0,
     "owner": "NC 2",
     "kreis": null,
-    "bundesland": "Ausschlie\u00dfliche Wirtschaftszone",
+    "bundesland": "Nordsee (Ausschlie\u00dfliche Wirtschaftszone)",
     "install_year": null
   },
   {
@@ -116,7 +116,7 @@
     "mw": 15.0,
     "owner": "NC 2",
     "kreis": null,
-    "bundesland": "Ausschlie\u00dfliche Wirtschaftszone",
+    "bundesland": "Nordsee (Ausschlie\u00dfliche Wirtschaftszone)",
     "install_year": null
   },
   {
@@ -124,7 +124,7 @@
     "mw": 15.0,
     "owner": "NC 2",
     "kreis": null,
-    "bundesland": "Ausschlie\u00dfliche Wirtschaftszone",
+    "bundesland": "Nordsee (Ausschlie\u00dfliche Wirtschaftszone)",
     "install_year": null
   },
   {
@@ -132,7 +132,7 @@
     "mw": 15.0,
     "owner": "NC 2",
     "kreis": null,
-    "bundesland": "Ausschlie\u00dfliche Wirtschaftszone",
+    "bundesland": "Nordsee (Ausschlie\u00dfliche Wirtschaftszone)",
     "install_year": null
   },
   {
@@ -140,7 +140,7 @@
     "mw": 15.0,
     "owner": "NC 2",
     "kreis": null,
-    "bundesland": "Ausschlie\u00dfliche Wirtschaftszone",
+    "bundesland": "Nordsee (Ausschlie\u00dfliche Wirtschaftszone)",
     "install_year": null
   },
   {
@@ -148,15 +148,15 @@
     "mw": 15.0,
     "owner": "NC 2",
     "kreis": null,
-    "bundesland": "Ausschlie\u00dfliche Wirtschaftszone",
+    "bundesland": "Nordsee (Ausschlie\u00dfliche Wirtschaftszone)",
     "install_year": null
   },
   {
     "tech": "Wind",
     "mw": 15.0,
-    "owner": "Nordseecluster 1",
+    "owner": "NC 2",
     "kreis": null,
-    "bundesland": "Ausschlie\u00dfliche Wirtschaftszone",
+    "bundesland": "Nordsee (Ausschlie\u00dfliche Wirtschaftszone)",
     "install_year": null
   }
 ]

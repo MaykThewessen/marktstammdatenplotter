@@ -1,4 +1,4 @@
-[project]
+[workspace]
 name = "marktstammdatenplotter"
 description = "Animated choropleth maps of German wind & solar capacity from the Marktstammdatenregister"
 authors = ["Mayk Thewessen <m.thewessen@birdviewenergy.ai>"]
