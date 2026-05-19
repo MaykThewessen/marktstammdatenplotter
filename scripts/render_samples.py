@@ -139,7 +139,7 @@ def _load_planned_gw_monthly(energy_type: str, snap: pd.Timestamp) -> pd.Series 
 
 
 def render_growth(records, energy_type, label, color_fill, color_line, out_name,
-                  xlim_start="2000-01-01"):
+                  xlim_start="2000-01-01", xlim_end=None):
     sub = records[records["energy_type"] == energy_type].copy()
     monthly = (
         sub.assign(month=sub["install_date"].dt.to_period("M"))
@@ -161,7 +161,10 @@ def render_growth(records, energy_type, label, color_fill, color_line, out_name,
         join_vals = np.concatenate([[last_val], plan_line.values])
         ax.plot(join_idx, join_vals, color=color_line, linewidth=1.8,
                 linestyle="--", alpha=0.7, label="Planned (MaStR)")
-    ax.set_xlim(left=pd.Timestamp(xlim_start))
+    ax.set_xlim(
+        left=pd.Timestamp(xlim_start),
+        right=pd.Timestamp(xlim_end) if xlim_end else None,
+    )
     ax.set_ylabel(f"Cumulative {label} [GW]")
     ax.set_title(f"Cumulative {label} capacity over time")
     ax.legend(loc="upper left", fontsize=9)
@@ -1480,10 +1483,11 @@ def main():
     )
     render_growth(
         records, "Solare Strahlungsenergie",
-        label="PV",
+        label="PV (all sizes)",
         color_fill="#f59e0b", color_line="#b45309",
         out_name="sample-pv-growth.svg",
         xlim_start="2005-01-01",
+        xlim_end="2030-12-31",
     )
     render_growth(
         records, "Wind",
