@@ -305,8 +305,7 @@ def normalise_kreis_name(s):
     """Normalise a German Landkreis name for fuzzy matching across sources.
 
     Bridges the open-MaStR bulk dump's `landkreis` text values against the
-    deutschlandGeoJSON-derived GPKG `name` values. Mismatch patterns
-    observed:
+    BKG VG2500-derived GPKG `name` values. Mismatch patterns observed:
       * Parenthetical suffixes:        "Frankfurt (Oder)" → "frankfurt"
       * -Kreis suffix (MaStR):         "Börde-Kreis" → "borde"
       * Städte suffix (GPKG city):     "Amberg Städte" → "amberg"
@@ -314,14 +313,14 @@ def normalise_kreis_name(s):
       * Landkreis prefix (rare):       "Landkreis Augsburg" → "augsburg"
       * Whitespace + casing            normalised
       * German umlauts                 collapsed to ASCII
+      * Abbreviation spacing (Bayern): "Neumarkt i.d. OPf." vs
+                                       "Neumarkt i.d.OPf." — all whitespace
+                                       around `.` is stripped so both
+                                       collapse to the same key.
 
-    Combined recovery on this dataset is ~84 % of solar GW. The residual
-    ~16 % sits in Kreise that were merged during the 2007 (Sachsen-Anhalt,
-    Sachsen) and 2011 (Mecklenburg-Vorpommern) administrative reforms —
-    MaStR uses the post-reform name (e.g. "Anhalt-Bitterfeld") while the
-    upstream GPKG still carries the pre-reform constituents
-    (e.g. "Anhalt-Zerbst", "Bitterfeld"). A current Kreise GeoJSON
-    would close that gap; not addressed here.
+    Combined recovery on this dataset is ~97 % of solar GW. Residual
+    unmatched rows are typically MaStR records with `landkreis="Null"`
+    or municipality-only entries (no Kreis assigned at registration).
     """
     import re
     if s is None or (isinstance(s, float) and pd.isna(s)):
@@ -340,6 +339,9 @@ def normalise_kreis_name(s):
     for k, v in umlaut.items():
         s = s.replace(k, v)
     s = s.lower()
+    # Strip spaces adjacent to periods so Bavarian abbreviations like
+    # "neumarkt i.d. opf." and "neumarkt i.d.opf." converge.
+    s = re.sub(r"\s*\.\s*", ".", s)
     s = re.sub(r"\s+", " ", s).strip()
     return s
 
@@ -692,6 +694,7 @@ def plot_choropleth(
         legend_kwds=legend_kwds,
         missing_kwds={"color": "#eeeeee"},
     )
+    aggregated.dissolve().boundary.plot(ax=ax, color="black", linewidth=0.8, zorder=5)
     ax.set_axis_off()
     # `title` is used verbatim — callers control where the date appears.
     ax.set_title(title, fontsize=13)
