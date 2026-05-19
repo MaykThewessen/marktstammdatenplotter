@@ -32,13 +32,6 @@ DEFAULT_GPKG_PATHS = [
 ]
 
 
-def find_data_dir() -> Path | None:
-    for candidate in DEFAULT_DATA_DIRS:
-        if candidate.exists() and any(candidate.glob("*.json")):
-            return candidate
-    return None
-
-
 def find_data_dirs() -> list[Path]:
     """All default dirs that contain *.json scrapes."""
     return [c for c in DEFAULT_DATA_DIRS if c.exists() and any(c.glob("*.json"))]
@@ -195,6 +188,7 @@ def load_admin_units(gpkg_path: Path | None = None, demo_if_missing: bool = True
         return _synthetic_admin_units(), True
 
     gdf = gpd.read_file(chosen, layer="multipolygons")
+    gdf["geometry"] = gdf["geometry"].simplify(0.005, preserve_topology=True)
     return gdf, False
 
 
@@ -569,11 +563,14 @@ def aggregate_bess_by_unit(
     *,
     include_planned: bool = False,
 ):
-    """Spatial-join active BESS to admin units and sum power (GW) and energy (GWh).
+    """Aggregate active BESS to admin units, summing power (GW) and energy (GWh).
+
+    Uses spatial join for units that have coordinates, and a name-based
+    landkreis join for the majority of residential units whose coordinates
+    are anonymised in the BNetzA bulk dump.
 
     `include_planned=True` adds units whose `install_date` is NaT but whose
-    `planned_date` precedes `plot_date` — useful for the Jänschwalde-style
-    pipeline view of the next few years.
+    `planned_date` precedes `plot_date`.
     """
     import geopandas as gpd
 
@@ -589,14 +586,49 @@ def aggregate_bess_by_unit(
         out["energy_gwh"] = 0.0
         return out, sub
 
-    geom = gpd.points_from_xy(sub["longitude"], sub["latitude"], crs="EPSG:4326")
-    pts = gpd.GeoDataFrame(sub, geometry=geom, crs="EPSG:4326")
-    joined = gpd.sjoin(pts, admin_units[["geometry"]], predicate="within", how="left")
-    pwr = joined.groupby("index_right")["power_kw"].sum() / 1e6   # kW → GW
-    enr = joined.groupby("index_right")["energy_kwh"].sum() / 1e6  # kWh → GWh
+    has_coords = sub["latitude"].notna() & sub["longitude"].notna()
+    pwr_by_idx = pd.Series(0.0, index=admin_units.index, dtype=float)
+    enr_by_idx = pd.Series(0.0, index=admin_units.index, dtype=float)
+
+    # --- spatial join for units with known coordinates ---
+    if has_coords.any():
+        geo_sub = sub[has_coords]
+        geom = gpd.points_from_xy(geo_sub["longitude"], geo_sub["latitude"], crs="EPSG:4326")
+        pts = gpd.GeoDataFrame(geo_sub, geometry=geom, crs="EPSG:4326")
+        joined = gpd.sjoin(pts, admin_units[["geometry"]], predicate="within", how="left")
+        pwr_by_idx = pwr_by_idx.add(
+            joined.groupby("index_right")["power_kw"].sum() / 1e6, fill_value=0.0
+        )
+        enr_by_idx = enr_by_idx.add(
+            joined.groupby("index_right")["energy_kwh"].sum() / 1e6, fill_value=0.0
+        )
+
+    # --- name-based join for anonymised rows (no coordinates) ---
+    if (~has_coords).any() and "landkreis_norm" in sub.columns:
+        anon = sub[~has_coords]
+        key = admin_units["name"].apply(normalise_kreis_name)
+        # Warn when two Kreise normalise to the same key (e.g. Augsburg
+        # Stadtkreis vs. Landkreis Augsburg) — anonymised units are
+        # unresolvable and will be attributed to whichever Kreis is last.
+        dupes = key[key.duplicated()].unique()
+        if len(dupes):
+            import warnings
+            warnings.warn(
+                f"aggregate_bess_by_unit: {len(dupes)} ambiguous Kreis name(s) "
+                f"after normalisation {list(dupes[:5])} — anonymised BESS units "
+                "with those names will be attributed to the last matching Kreis.",
+                stacklevel=2,
+            )
+        name_to_idx = pd.Series(admin_units.index, index=key.values)
+        anon_idx = anon["landkreis_norm"].map(name_to_idx)
+        pwr_name = anon.groupby(anon_idx)["power_kw"].sum() / 1e6
+        enr_name = anon.groupby(anon_idx)["energy_kwh"].sum() / 1e6
+        pwr_by_idx = pwr_by_idx.add(pwr_name, fill_value=0.0)
+        enr_by_idx = enr_by_idx.add(enr_name, fill_value=0.0)
+
     out = admin_units.copy()
-    out["power_gw"] = out.index.map(pwr).astype(float).fillna(0.0)
-    out["energy_gwh"] = out.index.map(enr).astype(float).fillna(0.0)
+    out["power_gw"] = pwr_by_idx.reindex(out.index).fillna(0.0)
+    out["energy_gwh"] = enr_by_idx.reindex(out.index).fillna(0.0)
     return out, sub
 
 
