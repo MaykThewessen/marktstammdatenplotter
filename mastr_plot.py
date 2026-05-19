@@ -10,6 +10,7 @@ Provides:
 from __future__ import annotations
 
 import os
+import re
 from datetime import date
 from pathlib import Path
 
@@ -121,8 +122,8 @@ def load_records(data_dir: Path | None = None, demo_if_missing: bool = True,
     If `data_dir` is None, all default dirs that hold *.json scrapes are merged
     so a single DataFrame contains wind + PV when both have been scraped.
     """
-    if prefer_bulk and data_dir is None and find_bulk_dir() is not None:
-        bulk_dir = find_bulk_dir()
+    bulk_dir = find_bulk_dir() if (prefer_bulk and data_dir is None) else None
+    if bulk_dir is not None:
         frames = []
         for tech in ("pv", "wind"):
             path = bulk_dir / {"pv": "solar.parquet", "wind": "wind.parquet"}[tech]
@@ -133,7 +134,7 @@ def load_records(data_dir: Path | None = None, demo_if_missing: bool = True,
             df = pd.concat(frames, ignore_index=True)
             # Drop tz so downstream snap-date comparisons work.
             for col in ("install_date", "removal_date"):
-                if col in df.columns and hasattr(df[col].dtype, "tz") and df[col].dtype.tz is not None:
+                if col in df.columns and isinstance(df[col].dtype, pd.DatetimeTZDtype):
                     df[col] = df[col].dt.tz_localize(None)
             return df, False
 
@@ -151,7 +152,11 @@ def load_records(data_dir: Path | None = None, demo_if_missing: bool = True,
         records = mastr_parser.load_data(str(d))
         if records:
             frames.append(pd.DataFrame([r.__dict__ for r in records]))
-    df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+    if not frames:
+        if not demo_if_missing:
+            raise FileNotFoundError(f"No parseable records in {dirs}.")
+        return _synthetic_records(), True
+    df = pd.concat(frames, ignore_index=True)
     df["install_date"] = pd.to_datetime(df["install_date"]).dt.tz_localize(None)
     df["removal_date"] = pd.to_datetime(df["removal_date"]).dt.tz_localize(None)
     return df, False
@@ -217,6 +222,17 @@ def bess_sector(energy_kwh: float | None) -> str:
     return BESS_SECTORS[2]
 
 
+def bess_sector_series(energy_kwh) -> pd.Series:
+    """Vectorised HSS/CSS/LSS classifier. Equivalent to bess_sector row-wise
+    but uses pd.cut on the whole column — required for the 1.75M-row bulk
+    dump where .apply() is unacceptably slow.
+    """
+    s = pd.to_numeric(energy_kwh, errors="coerce")
+    bins = [0.0, BESS_HSS_KWH_MAX, BESS_CSS_KWH_MAX, np.inf]
+    cats = pd.cut(s, bins=bins, labels=BESS_SECTORS, right=False).astype(object)
+    return cats.where(s > 0, "unknown")
+
+
 def load_bess(data_dir: Path | None = None, demo_if_missing: bool = False,
               prefer_bulk: bool = True) -> tuple[pd.DataFrame, bool]:
     """Load BESS records as a tidy DataFrame.
@@ -230,11 +246,10 @@ def load_bess(data_dir: Path | None = None, demo_if_missing: bool = False,
     disk, that 1.75 M-row full registry slice is used instead of the
     top-200k JSON scrape.
     """
-    if prefer_bulk and data_dir is None and find_bulk_dir() is not None:
-        bulk_dir = find_bulk_dir()
-        if (bulk_dir / "storage.parquet").exists():
-            df, _ = load_from_bulk("bess", bulk_dir)
-            return df, False
+    bulk_dir = find_bulk_dir() if (prefer_bulk and data_dir is None) else None
+    if bulk_dir is not None and (bulk_dir / "storage.parquet").exists():
+        df, _ = load_from_bulk("bess", bulk_dir)
+        return df, False
 
     candidates = [
         REPO_ROOT / "data-bess",
@@ -258,7 +273,7 @@ def load_bess(data_dir: Path | None = None, demo_if_missing: bool = False,
     df["removal_date"] = pd.to_datetime(df["removal_date"]).dt.tz_localize(None)
     df["effective_date"] = df["install_date"].fillna(df["planned_date"])
     df["duration_h"] = df["energy_kwh"] / df["power_kw"].replace(0, np.nan)
-    df["sector"] = df["energy_kwh"].apply(bess_sector)
+    df["sector"] = bess_sector_series(df["energy_kwh"])
     df["is_battery"] = df["storage_tech"] == "Batterie"
     df["is_psh"] = df["storage_tech"] == "Pumpspeicher"
     # Pre-compute normalised Kreis names — enables name-based fallback in
@@ -298,6 +313,17 @@ def find_bulk_dir() -> Path | None:
     return None
 
 
+_KREIS_PREFIX_RE = re.compile(r"^(Stadt|Landkreis|Kreis|LK)\s+", re.IGNORECASE)
+_KREIS_PAREN_RE = re.compile(r"\s+\([^)]+\)$")
+_KREIS_STADTE_RE = re.compile(r"\s+St[aä]dte$", re.IGNORECASE)
+_KREIS_SUFFIX_RE = re.compile(r"\s+-?Kreis$", re.IGNORECASE)
+_KREIS_DOT_WS_RE = re.compile(r"\s*\.\s*")
+_KREIS_WS_RE = re.compile(r"\s+")
+_UMLAUT_TRANS = str.maketrans(
+    {"ä": "a", "ö": "o", "ü": "u", "ß": "ss", "Ä": "a", "Ö": "o", "Ü": "u"}
+)
+
+
 def normalise_kreis_name(s):
     """Normalise a German Landkreis name for fuzzy matching across sources.
 
@@ -319,27 +345,16 @@ def normalise_kreis_name(s):
     unmatched rows are typically MaStR records with `landkreis="Null"`
     or municipality-only entries (no Kreis assigned at registration).
     """
-    import re
     if s is None or (isinstance(s, float) and pd.isna(s)):
         return None
     s = str(s).strip()
-    # Strip prefixes
-    s = re.sub(r"^(Stadt|Landkreis|Kreis|LK)\s+", "", s, flags=re.IGNORECASE)
-    # Strip suffixes
-    s = re.sub(r"\s+\([^)]+\)$", "", s)
-    s = re.sub(r"\s+St[aä]dte$", "", s, flags=re.IGNORECASE)
-    s = re.sub(r"\s+-?Kreis$", "", s, flags=re.IGNORECASE)
-    # Collapse whitespace, lowercase, ASCII-fold the umlauts so encoding
-    # quirks don't break the join.
-    umlaut = {"ä": "a", "ö": "o", "ü": "u", "ß": "ss",
-              "Ä": "a", "Ö": "o", "Ü": "u"}
-    for k, v in umlaut.items():
-        s = s.replace(k, v)
-    s = s.lower()
-    # Strip spaces adjacent to periods so Bavarian abbreviations like
-    # "neumarkt i.d. opf." and "neumarkt i.d.opf." converge.
-    s = re.sub(r"\s*\.\s*", ".", s)
-    s = re.sub(r"\s+", " ", s).strip()
+    s = _KREIS_PREFIX_RE.sub("", s)
+    s = _KREIS_PAREN_RE.sub("", s)
+    s = _KREIS_STADTE_RE.sub("", s)
+    s = _KREIS_SUFFIX_RE.sub("", s)
+    s = s.translate(_UMLAUT_TRANS).lower()
+    s = _KREIS_DOT_WS_RE.sub(".", s)
+    s = _KREIS_WS_RE.sub(" ", s).strip()
     return s
 
 
@@ -406,10 +421,8 @@ def load_from_bulk(
     # Strip tz so the rest of the pipeline (which uses tz-naive snap dates)
     # can compare without warning.
     for col in ("install_date", "removal_date", "planned_date"):
-        if col in df.columns:
-            ts = df[col]
-            if hasattr(ts.dtype, "tz") and ts.dtype.tz is not None:
-                df[col] = ts.dt.tz_localize(None)
+        if col in df.columns and isinstance(df[col].dtype, pd.DatetimeTZDtype):
+            df[col] = df[col].dt.tz_localize(None)
 
     # power_kw alias for BESS-style aggregations.
     if "power" in df.columns:
@@ -473,7 +486,7 @@ def load_from_bulk(
         # is_private flag — bulk dump anonymises residential rows, but we can
         # treat single-module Haushalt installations as private.
         if "is_private" not in df.columns:
-            df["is_private"] = (df.get("usage_type") == "Haushalt") if "usage_type" in df.columns else False
+            df["is_private"] = (df["usage_type"] == "Haushalt") if "usage_type" in df.columns else False
 
     # Add a normalised landkreis column for downstream name-based joins
     # (saves re-running normalise_kreis_name() at every aggregation step).
@@ -492,15 +505,16 @@ def load_from_bulk(
         if "energy_kwh" in df.columns and "power_kw" in df.columns:
             df["duration_h"] = df["energy_kwh"] / df["power_kw"].replace(0, np.nan)
         if "energy_kwh" in df.columns:
-            df["sector"] = df["energy_kwh"].apply(bess_sector)
+            df["sector"] = bess_sector_series(df["energy_kwh"])
         if "storage_tech" in df.columns:
             df["is_battery"] = df["storage_tech"] == "Batterie"
             df["is_psh"] = df["storage_tech"] == "Pumpspeicher"
 
     if "install_date" in df.columns:
-        df["effective_date"] = df.get("install_date")
         if "planned_date" in df.columns:
             df["effective_date"] = df["install_date"].fillna(df["planned_date"])
+        else:
+            df["effective_date"] = df["install_date"]
 
     return df, True
 

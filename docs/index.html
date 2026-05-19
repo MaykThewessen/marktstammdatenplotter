@@ -266,7 +266,7 @@ ogr2ogr -f GPKG germany_kreise.gpkg germany_admin_levels_4_6.osm \
         <p>
           Bins are pre-computed once on a representative date so the legend stays
           stable across all frames — otherwise the same color would mean different
-          megawatts in January 2005 versus January 2025.
+          megawatts in January 2005 versus May 2026.
         </p>
       </section>
 
@@ -512,7 +512,7 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
         <p>
           Bottom panel: mean per-turbine rotor MW by commission year.
           The fleet has upsized from ~ 0.5 MW per turbine in the late
-          90s to ~ 7 MW in 2025 — a <b>15× growth</b> at the unit level,
+          90s to ~ 7 MW in 2026 — a <b>15× growth</b> at the unit level,
           driven by the new offshore 15 MW class.
         </p>
         <figure>
@@ -627,7 +627,19 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
           <figcaption>Figure 28 — Cumulative battery power (purple) + energy (blue dashed) since 2010.</figcaption>
         </figure>
 
-        <h3>21 years of battery + storage growth</h3>
+        <h3>GWh trajectory by sector — historical + planned pipeline</h3>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-bess-gwh-trajectory.svg" aria-label="BESS GWh trajectory by sector"></object>
+          <figcaption>
+            Figure 29 — Cumulative usable storage energy (GWh) per sector
+            (HSS / CSS / LSS), plus the forward trajectory from planned
+            commissioning dates through 2030. Market estimates (battery-charts.de /
+            Figgener et al.) put HSS at ~21 GWh — the gap to registered
+            ~15 GWh is the ~20-40 % of residential batteries that never enter MaStR.
+          </figcaption>
+        </figure>
+
+        <h3>9 years of battery storage growth (2017 → May 2026)</h3>
         <figure>
           <video autoplay loop muted playsinline preload="metadata"
                  poster="assets/bess-2017-may2026.gif"
