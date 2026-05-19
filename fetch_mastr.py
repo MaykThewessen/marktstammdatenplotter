@@ -157,7 +157,7 @@ def run_incremental(since: datetime, energy_code: str, energy_name: str, out_dir
         cutoff_hit = False
         for e in entries:
             dt = parse_dotnet_date(e.get("InbetriebnahmeDatum"))
-            if dt is None or dt > since:
+            if dt is not None and dt > since:
                 all_entries.append(e)
                 new_count += 1
             else:

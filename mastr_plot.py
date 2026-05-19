@@ -32,13 +32,6 @@ DEFAULT_GPKG_PATHS = [
 ]
 
 
-def find_data_dir() -> Path | None:
-    for candidate in DEFAULT_DATA_DIRS:
-        if candidate.exists() and any(candidate.glob("*.json")):
-            return candidate
-    return None
-
-
 def find_data_dirs() -> list[Path]:
     """All default dirs that contain *.json scrapes."""
     return [c for c in DEFAULT_DATA_DIRS if c.exists() and any(c.glob("*.json"))]
@@ -614,6 +607,18 @@ def aggregate_bess_by_unit(
     if (~has_coords).any() and "landkreis_norm" in sub.columns:
         anon = sub[~has_coords]
         key = admin_units["name"].apply(normalise_kreis_name)
+        # Warn when two Kreise normalise to the same key (e.g. Augsburg
+        # Stadtkreis vs. Landkreis Augsburg) — anonymised units are
+        # unresolvable and will be attributed to whichever Kreis is last.
+        dupes = key[key.duplicated()].unique()
+        if len(dupes):
+            import warnings
+            warnings.warn(
+                f"aggregate_bess_by_unit: {len(dupes)} ambiguous Kreis name(s) "
+                f"after normalisation {list(dupes[:5])} — anonymised BESS units "
+                "with those names will be attributed to the last matching Kreis.",
+                stacklevel=2,
+            )
         name_to_idx = pd.Series(admin_units.index, index=key.values)
         anon_idx = anon["landkreis_norm"].map(name_to_idx)
         pwr_name = anon.groupby(anon_idx)["power_kw"].sum() / 1e6
