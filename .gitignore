@@ -42,3 +42,6 @@ germany_admin_levels_*.osm
 # Virtual envs
 .venv/
 .env
+
+# Claude Code local config
+.claude/

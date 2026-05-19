@@ -355,11 +355,12 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
 
         <h3>Sample renders (real MaStR data)</h3>
         <p>
-          Generated from a May 2026 scrape of the public Marktstammdatenregister
-          API. <b>Wind</b> uses the full registry slice — 42 495 turbines, every
-          Kreis covered. <b>PV</b> uses the top 50 000 utility-scale plants
-          sorted by capacity (every plant ≥ 200 kW, ≈ 70 GW combined),
-          excluding the long tail of 6 M rooftop and balcony installations.
+          Generated from the open-MaStR Zenodo full registry dump (cutoff
+          2025-02-09) merged with the MaStR API delta through May 2026.
+          <b>Wind</b>: full registry (~42 k turbines, every Kreis covered).
+          <b>PV</b>: full registry (~4.86 M plants, including all rooftop
+          and balcony solar — no power threshold).
+          <b>BESS</b>: top 200 k storage units by installed power.
         </p>
 
         <figure>
@@ -373,8 +374,8 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
         </figure>
 
         <figure>
-          <object type="image/svg+xml" data="assets/sample-pv-map.svg" aria-label="PV choropleth (top 50k by capacity)"></object>
-          <figcaption>Figure 7 — PV capacity per Kreis, top 50 000 plants ≥ 200 kW (≈ 70 GW).</figcaption>
+          <object type="image/svg+xml" data="assets/sample-pv-map.svg" aria-label="PV choropleth (full registry)"></object>
+          <figcaption>Figure 7 — PV capacity per Kreis, full open-MaStR registry (~4.86 M plants).</figcaption>
         </figure>
 
         <figure>
@@ -396,13 +397,13 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
         </figure>
         <figure>
           <object type="image/svg+xml" data="assets/sample-pv-by-size.svg" aria-label="PV size-bin breakdown"></object>
-          <figcaption>Figure 8b — PV (top-200k slice) installed power by per-plant size-bin. Sub-49 kW residential excluded by the scrape sort cut-off.</figcaption>
+          <figcaption>Figure 8b — PV installed power by per-plant size-bin (full registry, all sizes).</figcaption>
         </figure>
 
         <h3>Installed capacity by Bundesland</h3>
         <figure>
           <object type="image/svg+xml" data="assets/sample-by-bundesland.svg" aria-label="Capacity by Bundesland"></object>
-          <figcaption>Figure 9 — Wind + PV (≥ 200 kW) per state, snapshot 2026-05-01. Niedersachsen leads wind (12.7 GW); Bayern leads PV (12.0 GW).</figcaption>
+          <figcaption>Figure 9 — Wind + PV per state, snapshot 2026-05-01 (full registry). Niedersachsen leads wind (12.7 GW); Bayern leads PV (12.0 GW).</figcaption>
         </figure>
 
         <h3>21 years of wind growth + YTD 2026</h3>
@@ -562,11 +563,11 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
         <figure>
           <object type="image/svg+xml" data="assets/sample-bess-sectors.svg" aria-label="BESS sector summary"></object>
           <figcaption>
-            Figure 22 — Sector split at 2026-05-01 (active only):
-            HSS 176 441 units · 2.47 GW · 2.54 GWh ·
-            CSS 16 659 units · 0.68 GW · 1.20 GWh ·
-            LSS 569 units · 9.81 GW · 933 GWh
-            (LSS energy dominated by Pumpspeicher).
+            Figure 22 — Battery-only sector split at 2026-05-01 (active):
+            HSS 176 411 units · 2.47 GW · 2.54 GWh ·
+            CSS 16 655 units · 0.68 GW · 1.20 GWh ·
+            LSS 526 units · 3.34 GW · 5.65 GWh.
+            (PSH split off into its own section.)
           </figcaption>
         </figure>
         <figure>
@@ -606,13 +607,13 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
         <h3>BESS power per Kreis</h3>
         <figure>
           <object type="image/svg+xml" data="assets/sample-bess-power-map.svg" aria-label="BESS power choropleth"></object>
-          <figcaption>Figure 25 — Battery storage power per Kreis, snapshot 2026-05-01.</figcaption>
+          <figcaption>Figure 26 — Battery storage power per Kreis, snapshot 2026-05-01.</figcaption>
         </figure>
 
         <h3>BESS energy per Kreis</h3>
         <figure>
           <object type="image/svg+xml" data="assets/sample-bess-energy-map.svg" aria-label="BESS energy choropleth"></object>
-          <figcaption>Figure 26 — Battery storage energy capacity per Kreis (GWh) — batteries only, PSH split off into its own section.</figcaption>
+          <figcaption>Figure 27 — Battery storage energy capacity per Kreis (GWh) — batteries only, PSH split off into its own section.</figcaption>
         </figure>
 
         <h3>Duration distribution</h3>

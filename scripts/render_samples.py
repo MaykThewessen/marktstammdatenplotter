@@ -35,31 +35,27 @@ SNAP = pd.Timestamp("2026-05-01")  # Aligned with the final frame of the animati
 
 def _save_choropleth_pair(gdf, col, cmap, bins, title, legend_label, out_name,
                           title_fontsize=13):
-    """Render and save two choropleth SVGs: Jenks color bands and linear gradient."""
+    """Render and save the Jenks-binned choropleth SVG."""
     import matplotlib.colors as mcolors
     vmax = float(gdf[col].replace(0, np.nan).max()) if len(gdf) else 1.0
     if not np.isfinite(vmax) or vmax <= 0:
         vmax = 1.0
-    norms = [
-        ("",          mcolors.BoundaryNorm(bins, ncolors=256)),
-        ("_gradient", mcolors.Normalize(vmin=0.0, vmax=vmax)),
-    ]
+    norm = mcolors.BoundaryNorm(bins, ncolors=256)
     stem = Path(out_name).stem
-    for suffix, norm in norms:
-        fig, ax = plt.subplots(figsize=(9, 11), dpi=120)
-        gdf.plot(
-            column=col, ax=ax, cmap=cmap, norm=norm,
-            edgecolor="white", linewidth=0.3, legend=True,
-            legend_kwds={"label": legend_label, "shrink": 0.6},
-            missing_kwds={"color": "#eeeeee"},
-        )
-        gdf.dissolve().boundary.plot(ax=ax, color="black", linewidth=0.8, zorder=5)
-        ax.set_axis_off()
-        ax.set_title(title, fontsize=title_fontsize)
-        fig.tight_layout()
-        for d in (FIG, DOCS):
-            fig.savefig(d / f"{stem}{suffix}.svg", format="svg", bbox_inches="tight")
-        plt.close(fig)
+    fig, ax = plt.subplots(figsize=(9, 11), dpi=120)
+    gdf.plot(
+        column=col, ax=ax, cmap=cmap, norm=norm,
+        edgecolor="white", linewidth=0.3, legend=True,
+        legend_kwds={"label": legend_label, "shrink": 0.6},
+        missing_kwds={"color": "#eeeeee"},
+    )
+    gdf.dissolve().boundary.plot(ax=ax, color="black", linewidth=0.8, zorder=5)
+    ax.set_axis_off()
+    ax.set_title(title, fontsize=title_fontsize)
+    fig.tight_layout()
+    for d in (FIG, DOCS):
+        fig.savefig(d / f"{stem}.svg", format="svg", bbox_inches="tight")
+    plt.close(fig)
 
 
 def render_map(records, units, energy_type, title_prefix, cmap, out_name):

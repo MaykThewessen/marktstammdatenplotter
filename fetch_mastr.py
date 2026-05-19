@@ -88,10 +88,40 @@ def _page_path(out_dir: Path, page: int) -> Path:
     return out_dir / f"page-{page:03d}.json"
 
 
+def _check_manifest(out_dir: Path, energy_code: str, sort: str) -> None:
+    """Refuse to mix pages from different sort/energy_code in one out_dir.
+
+    Writes .manifest.json on first use; verifies it on subsequent runs.
+    Cached pages from a previous incompatible scrape would silently mix
+    with new pages and produce a corrupt dataset.
+    """
+    manifest = out_dir / ".manifest.json"
+    new = {"energy_code": energy_code, "sort": sort}
+    if manifest.exists():
+        old = json.loads(manifest.read_text())
+        if old != new:
+            raise SystemExit(
+                f"ERROR: {out_dir} already contains pages from "
+                f"{old} but this run uses {new}.\n"
+                f"Delete {out_dir} or use --out-dir <fresh-path>."
+            )
+    else:
+        # Only write the manifest if no orphan pages from an older run exist.
+        if any(out_dir.glob("page-*.json")):
+            raise SystemExit(
+                f"ERROR: {out_dir} has cached page-*.json files but no "
+                f".manifest.json — unknown sort/energy_code.\n"
+                f"Delete the dir to start fresh."
+            )
+        manifest.write_text(json.dumps(new))
+
+
 def run_full(energy_code: str, energy_name: str, out_dir: Path,
              sort: str = "", max_pages: int | None = None, per_page: bool = False):
     """Download entries (all pages, or up to max_pages)."""
     out_dir.mkdir(parents=True, exist_ok=True)
+    if per_page:
+        _check_manifest(out_dir, energy_code, sort)
 
     # Probe total from page 1 (may skip HTTP if file exists in per-page mode).
     p1_path = _page_path(out_dir, 1) if per_page else None

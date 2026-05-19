@@ -495,10 +495,19 @@ def load_from_bulk(
         df["landkreis_norm"] = df["landkreis"].apply(normalise_kreis_name)
 
     # off_shore label for wind compatibility with the JSON-scrape schema.
+    # BNetzA bulk parquet has no sea-specific label, so split Nordsee /
+    # Ostsee by longitude (Nordsee is west of ~10° E, Ostsee east of it).
     if tech == "wind" and "location_type" in df.columns:
-        df["off_shore"] = df["location_type"].map(
-            {"Windkraft auf See": "Nordsee"}
-        )
+        is_offshore = df["location_type"] == "Windkraft auf See"
+        df["off_shore"] = None
+        if is_offshore.any():
+            if "longitude" in df.columns:
+                df.loc[is_offshore & (df["longitude"] < 10.0), "off_shore"] = "Nordsee"
+                df.loc[is_offshore & (df["longitude"] >= 10.0), "off_shore"] = "Ostsee"
+            # Fall back to Nordsee for rows with no coordinates (shouldn't
+            # happen for offshore — MaStR keeps offshore lat/lon — but
+            # avoids dropping bars from the offshore chart).
+            df.loc[is_offshore & df["off_shore"].isna(), "off_shore"] = "Nordsee"
 
     # BESS-style helper columns so aggregate_bess_by_unit / sector / etc.
     # all work against the bulk loader output.

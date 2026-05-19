@@ -324,32 +324,25 @@ seq 7 | xargs -P 4 -I{} curl --get \
   --data-urlencode 'forExport=true' -o data-{}.json
 ```
 
-The `filter` excludes two Energieträger codes (2495, 2496) — both PV — so the
-default scrape covers wind, biomass, hydro, gas, etc. ~169 k rows. Rate-limit
-yourself; the API gets slow under heavy load.
+The `filter` excludes Energieträger codes `2495` (Solar / PV) and `2496`
+(Speicher / storage), so the default scrape covers wind, biomass, hydro,
+gas, etc. ~169 k rows. Rate-limit yourself; the API gets slow under
+heavy load. For PV use `pixi run scrape-pv-top` (or `scrape-bess` for
+storage) — see below.
 
 ### Scraping PV separately
 
-The PV slice of the registry holds **6.1 M plants** (rooftop, balcony, ground).
+The PV slice of the registry holds **~6 M plants** (rooftop, balcony, ground).
 The API returns 25 000 rows per page, so a full pull is ~245 pages and ≈24 GB
-of JSON — usually not what you want. Two practical scopes:
+of JSON — usually not what you want. The repo defaults to the open-MaStR
+Zenodo full registry parquet (~4.86 M PV plants) merged with an API delta
+for the live tail. For a quick top-by-capacity JSON slice use the pixi task:
 
 ```bash
-# "Top-N by capacity" — 50 k largest plants (~200 MB).
-# Sort = Bruttoleistung-desc puts the 200 MW utility parks first; page 2
-# bottoms out around 200 kW. Captures ~70 GW = bulk of Germany's PV fleet,
-# without the 6 M rooftop/balcony long tail.
-mkdir -p data-pv
-seq 2 | xargs -P 2 -I{} curl --get \
-  'https://www.marktstammdatenregister.de/MaStR/Einheit/EinheitJson/GetErweiterteOeffentlicheEinheitStromerzeugung' \
-  --data-urlencode 'sort=Bruttoleistung-desc' \
-  --data-urlencode 'page={}' \
-  --data-urlencode 'pageSize=25000' \
-  --data-urlencode 'group=' \
-  --data-urlencode "filter=Energieträger~eq~'2495'" \
-  --data-urlencode 'forExport=true' \
-  -o data-pv/data-{}.json
+pixi run scrape-pv-top   # 200 k largest plants (8 pages, ~800 MB)
 ```
+
+This is `Bruttoleistung-desc` sorted — captures every plant ≥ 49 kW.
 
 > **Filter quirk** — MaStR silently drops the second clause when ANDed with a
 > different field, e.g. `Energieträger~eq~'2495'~and~ArtDerSolaranlageId~eq~'852'`
