@@ -32,8 +32,9 @@ API_URL = (
 )
 
 ENERGY_TYPES = {
-    "wind":  {"code": "2497", "label": "Windenergie",             "pages_full": "~2"},
-    "solar": {"code": "2495", "label": "Solare Strahlungsenergie","pages_full": "~237 — use incremental!"},
+    "wind":    {"code": "2497", "label": "Windenergie",             "pages_full": "~2"},
+    "solar":   {"code": "2495", "label": "Solare Strahlungsenergie","pages_full": "~237 — use incremental!"},
+    "storage": {"code": "2496", "label": "Speicher",               "pages_full": "~102 — use incremental!"},
 }
 
 PAGE_SIZE = 25000
