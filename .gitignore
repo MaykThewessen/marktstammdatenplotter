@@ -1,5 +1,7 @@
 # Raw data and downloaded datasets
 non-pv-data/
+BNetzA_MaStR/bnetza_mastr_*
+BNetzA_MaStR/solar.parquet
 *.gpkg
 *.json
 
