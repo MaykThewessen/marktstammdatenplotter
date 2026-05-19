@@ -33,6 +33,35 @@ DOCS = ROOT / "docs" / "assets"
 SNAP = pd.Timestamp("2026-05-01")  # Aligned with the final frame of the animation GIFs
 
 
+def _save_choropleth_pair(gdf, col, cmap, bins, title, legend_label, out_name,
+                          title_fontsize=13):
+    """Render and save two choropleth SVGs: Jenks color bands and linear gradient."""
+    import matplotlib.colors as mcolors
+    vmax = float(gdf[col].replace(0, np.nan).max()) if len(gdf) else 1.0
+    if not np.isfinite(vmax) or vmax <= 0:
+        vmax = 1.0
+    norms = [
+        ("",          mcolors.BoundaryNorm(bins, ncolors=256)),
+        ("_gradient", mcolors.Normalize(vmin=0.0, vmax=vmax)),
+    ]
+    stem = Path(out_name).stem
+    for suffix, norm in norms:
+        fig, ax = plt.subplots(figsize=(9, 11), dpi=120)
+        gdf.plot(
+            column=col, ax=ax, cmap=cmap, norm=norm,
+            edgecolor="white", linewidth=0.3, legend=True,
+            legend_kwds={"label": legend_label, "shrink": 0.6},
+            missing_kwds={"color": "#eeeeee"},
+        )
+        gdf.dissolve().boundary.plot(ax=ax, color="black", linewidth=0.8, zorder=5)
+        ax.set_axis_off()
+        ax.set_title(title, fontsize=title_fontsize)
+        fig.tight_layout()
+        for d in (FIG, DOCS):
+            fig.savefig(d / f"{stem}{suffix}.svg", format="svg", bbox_inches="tight")
+        plt.close(fig)
+
+
 def render_map(records, units, energy_type, title_prefix, cmap, out_name):
     agg, active = mastr_plot.aggregate_by_unit(records, units, SNAP.date(), energy_type)
     positive = agg["power_gw"][agg["power_gw"] > 0].to_numpy()
@@ -46,10 +75,7 @@ def render_map(records, units, energy_type, title_prefix, cmap, out_name):
     if total_gw - shown_gw > 1.0:
         title += f"\n({round(shown_gw, 1)} GW shown on map · " \
                  f"{round(total_gw - shown_gw, 1)} GW offshore / out-of-Kreis)"
-    fig = mastr_plot.plot_choropleth(agg, SNAP.date(), title, bins=bins, cmap=cmap)
-    for d in (FIG, DOCS):
-        fig.savefig(d / out_name, format="svg", bbox_inches="tight")
-    plt.close(fig)
+    _save_choropleth_pair(agg, "power_gw", cmap, bins, title, "Capacity [GW]", out_name)
 
 
 def render_growth(records, energy_type, label, color_fill, color_line, out_name,
@@ -258,26 +284,12 @@ def render_yoy_additions(records, units, out_name, year: int = 2024):
     bins = mastr_plot.jenks_bins(geo["mw_added"][geo["mw_added"] > 0].to_numpy(), k=7)
     if len(bins) < 2:
         bins = [0.0, max(1.0, float(geo["mw_added"].max() or 1.0))]
-    norm = mcolors.BoundaryNorm(bins, ncolors=256)
-
-    fig, ax = plt.subplots(figsize=(9, 11), dpi=120)
-    geo.plot(
-        column="mw_added", ax=ax, cmap="RdPu", norm=norm,
-        edgecolor="white", linewidth=0.3, legend=True,
-        legend_kwds={"label": f"New capacity {year} [MW]", "shrink": 0.6},
-        missing_kwds={"color": "#eeeeee"},
-    )
-    geo.dissolve().boundary.plot(ax=ax, color="black", linewidth=0.8, zorder=5)
-    ax.set_axis_off()
-    ax.set_title(
+    title = (
         f"Capacity added during {year} per Kreis\n"
-        f"(Wind + PV ≥49 kW from this scrape · {round(geo['mw_added'].sum() / 1e3, 1)} GW total)",
-        fontsize=13,
+        f"(Wind + PV ≥49 kW from this scrape · {round(geo['mw_added'].sum() / 1e3, 1)} GW total)"
     )
-    fig.tight_layout()
-    for d in (FIG, DOCS):
-        fig.savefig(d / out_name, format="svg", bbox_inches="tight")
-    plt.close(fig)
+    _save_choropleth_pair(geo, "mw_added", "RdPu", bins, title,
+                          f"New capacity {year} [MW]", out_name)
 
 
 def render_density_map(records, units, energy_type, cmap, out_name, title_prefix):
@@ -292,26 +304,12 @@ def render_density_map(records, units, energy_type, cmap, out_name, title_prefix
     bins = mastr_plot.jenks_bins(positive, k=7)
     if len(bins) < 2:
         bins = [0.0, max(1.0, float(positive.max() or 1.0))]
-    norm = mcolors.BoundaryNorm(bins, ncolors=256)
-
-    fig, ax = plt.subplots(figsize=(9, 11), dpi=120)
-    agg.plot(
-        column="mw_per_km2", ax=ax, cmap=cmap, norm=norm,
-        edgecolor="white", linewidth=0.3, legend=True,
-        legend_kwds={"label": "Capacity density [MW/km²]", "shrink": 0.6},
-        missing_kwds={"color": "#eeeeee"},
-    )
-    agg.dissolve().boundary.plot(ax=ax, color="black", linewidth=0.8, zorder=5)
-    ax.set_axis_off()
-    ax.set_title(
+    title = (
         f"{title_prefix} per km² — {SNAP.date()}\n"
-        f"{len(active):,} active · {round(active['power'].sum() / 1e6, 1)} GW total",
-        fontsize=13,
+        f"{len(active):,} active · {round(active['power'].sum() / 1e6, 1)} GW total"
     )
-    fig.tight_layout()
-    for d in (FIG, DOCS):
-        fig.savefig(d / out_name, format="svg", bbox_inches="tight")
-    plt.close(fig)
+    _save_choropleth_pair(agg, "mw_per_km2", cmap, bins, title,
+                          "Capacity density [MW/km²]", out_name)
 
 
 def export_largest_plants(records, units, out_name, top_n: int = 10):
@@ -1069,26 +1067,13 @@ def render_psh_charts(psh_df, units, out_map: str, out_summary: str, out_top: st
     bins = mastr_plot.jenks_bins(pos, k=min(6, max(2, len(pos) - 1)))
     if len(bins) < 2:
         bins = [0.0, max(1.0, float(pos.max() or 1.0))]
-    norm = mcolors.BoundaryNorm(bins, ncolors=256)
-    fig, ax = plt.subplots(figsize=(9, 11), dpi=120)
-    agg.plot(
-        column="energy_gwh", ax=ax, cmap="GnBu", norm=norm,
-        edgecolor="white", linewidth=0.3, legend=True,
-        legend_kwds={"label": "PSH energy [GWh]", "shrink": 0.6},
-        missing_kwds={"color": "#eeeeee"},
-    )
-    agg.dissolve().boundary.plot(ax=ax, color="black", linewidth=0.8, zorder=5)
-    ax.set_axis_off()
-    ax.set_title(
+    title_psh = (
         f"Pumped-hydro storage (PSH) energy per Kreis — {snap.date()}\n"
         f"{len(active):,} sites · {active_gw:.2f} GW · {active_gwh:.1f} GWh "
-        f"(roughly 100× the energy density of battery storage)",
-        fontsize=12,
+        f"(roughly 100× the energy density of battery storage)"
     )
-    fig.tight_layout()
-    for d in (FIG, DOCS):
-        fig.savefig(d / out_map, format="svg", bbox_inches="tight")
-    plt.close(fig)
+    _save_choropleth_pair(agg, "energy_gwh", "GnBu", bins, title_psh,
+                          "PSH energy [GWh]", out_map, title_fontsize=12)
 
     # -- 2. Summary bars (power + energy + duration) -------------------------
     duration = active.copy()
@@ -1188,50 +1173,24 @@ def render_bess_charts(bess_df, units, out_power: str, out_energy: str,
     bins = mastr_plot.jenks_bins(pos, k=7)
     if len(bins) < 2:
         bins = [0.0, max(1.0, float(pos.max() or 1.0))]
-    norm = mcolors.BoundaryNorm(bins, ncolors=256)
-    fig, ax = plt.subplots(figsize=(9, 11), dpi=120)
-    agg.plot(
-        column="power_gw", ax=ax, cmap="BuPu", norm=norm,
-        edgecolor="white", linewidth=0.3, legend=True,
-        legend_kwds={"label": "BESS power [GW]", "shrink": 0.6},
-        missing_kwds={"color": "#eeeeee"},
-    )
-    agg.dissolve().boundary.plot(ax=ax, color="black", linewidth=0.8, zorder=5)
-    ax.set_axis_off()
-    ax.set_title(
+    title_bess_p = (
         f"Battery storage power per Kreis — {snap.date()}\n"
-        f"{len(active):,} units · {active_gw:.2f} GW · {active_gwh:.1f} GWh",
-        fontsize=13,
+        f"{len(active):,} units · {active_gw:.2f} GW · {active_gwh:.1f} GWh"
     )
-    fig.tight_layout()
-    for d in (FIG, DOCS):
-        fig.savefig(d / out_power, format="svg", bbox_inches="tight")
-    plt.close(fig)
+    _save_choropleth_pair(agg, "power_gw", "BuPu", bins, title_bess_p,
+                          "BESS power [GW]", out_power)
 
     # -- Energy choropleth ----------------------------------------------------
     pos_e = agg["energy_gwh"][agg["energy_gwh"] > 0].to_numpy()
     bins_e = mastr_plot.jenks_bins(pos_e, k=7)
     if len(bins_e) < 2:
         bins_e = [0.0, max(1.0, float(pos_e.max() or 1.0))]
-    norm_e = mcolors.BoundaryNorm(bins_e, ncolors=256)
-    fig, ax = plt.subplots(figsize=(9, 11), dpi=120)
-    agg.plot(
-        column="energy_gwh", ax=ax, cmap="BuPu", norm=norm_e,
-        edgecolor="white", linewidth=0.3, legend=True,
-        legend_kwds={"label": "BESS energy [GWh]", "shrink": 0.6},
-        missing_kwds={"color": "#eeeeee"},
-    )
-    agg.dissolve().boundary.plot(ax=ax, color="black", linewidth=0.8, zorder=5)
-    ax.set_axis_off()
-    ax.set_title(
+    title_bess_e = (
         f"Battery storage energy per Kreis — {snap.date()}\n"
-        f"{len(active):,} units · {active_gwh:.1f} GWh total",
-        fontsize=13,
+        f"{len(active):,} units · {active_gwh:.1f} GWh total"
     )
-    fig.tight_layout()
-    for d in (FIG, DOCS):
-        fig.savefig(d / out_energy, format="svg", bbox_inches="tight")
-    plt.close(fig)
+    _save_choropleth_pair(agg, "energy_gwh", "BuPu", bins_e, title_bess_e,
+                          "BESS energy [GWh]", out_energy)
 
     # -- Duration histogram (Batterie only) -----------------------------------
     b = bess_df[
