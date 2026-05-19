@@ -69,7 +69,11 @@
         <li><a href="#pv-by-type">PV by installation type</a></li>
         <li><a href="#pv-orientation">PV orientation</a></li>
         <li><a href="#wind-age">Wind fleet age</a></li>
-        <li><a href="#bess">Battery + storage (BESS)</a></li>
+        <li><a href="#bess">Battery + storage (BESS)</a>
+          <ul>
+            <li><a href="#bess">3-sector split (HSS/CSS/LSS)</a></li>
+          </ul>
+        </li>
         <li><a href="#density">Capacity density (MW/km²)</a></li>
         <li><a href="#yoy-additions">2024 additions</a></li>
         <li><a href="#largest-plants">Largest individual plants</a></li>
@@ -510,6 +514,46 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
           that captures everything from the 1 GW <b>LEAG GigaBattery
           Jänschwalde</b> (planned 2028) down to ~10 kW home batteries.
         </p>
+
+        <div class="admonition note">
+          <div class="title">Cross-reference · German + EU sources</div>
+          The three-sector split below uses the same boundaries as
+          <a href="https://battery-charts.de">battery-charts.de</a>
+          (RWTH Aachen · Figgener et al.), the
+          <a href="https://www.bves.de/">BVES (Bundesverband Energiespeichersysteme)</a>
+          market monitor, the
+          <a href="https://ease-storage.eu/">EASE European Storage Market Monitor</a>
+          and the EU SET-Plan flexibility scenarios. Helpful for direct
+          comparison with the figures those reports publish.
+        </div>
+
+        <h3>HSS / CSS / LSS — three-sector view</h3>
+        <p>
+          <b>Heimspeicher (HSS, &lt; 30 kWh)</b> — residential PV+battery,
+          5-15 kWh LFP units typical.
+          <b>Gewerblicher Speicher (CSS, 30 kWh – 1 MWh)</b> — C&amp;I
+          PV+battery, UPS, peak-shaving.
+          <b>Großspeicher (LSS, ≥ 1 MWh)</b> — grid-services + standalone
+          utility BESS + Pumpspeicher.
+        </p>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-bess-sectors.svg" aria-label="BESS sector summary"></object>
+          <figcaption>
+            Figure 22 — Sector split at 2026-05-01 (active only):
+            HSS 176 441 units · 2.47 GW · 2.54 GWh ·
+            CSS 16 659 units · 0.68 GW · 1.20 GWh ·
+            LSS 569 units · 9.81 GW · 933 GWh
+            (LSS energy dominated by Pumpspeicher).
+          </figcaption>
+        </figure>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-bess-sector-growth.svg" aria-label="BESS cumulative growth by sector"></object>
+          <figcaption>Figure 23 — Cumulative BESS power + energy by sector since 2010. HSS is the headcount story; LSS is the GW + GWh story.</figcaption>
+        </figure>
+        <figure>
+          <object type="image/svg+xml" data="assets/sample-bess-sector-duration.svg" aria-label="BESS duration per sector"></object>
+          <figcaption>Figure 24 — Duration distribution per sector (Batterie only). HSS clusters at ~1 h (paired to PV self-consumption); CSS at 1.5-2 h; LSS spreads across 1-4 h.</figcaption>
+        </figure>
         <p>
           Snapshot 2026-05-01 (commissioned only):
           <b>193 678 units</b> · <b>7.86 GW</b> · <b>98.9 GWh</b>.
@@ -526,31 +570,31 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
         <h3>BESS power per Kreis</h3>
         <figure>
           <object type="image/svg+xml" data="assets/sample-bess-power-map.svg" aria-label="BESS power choropleth"></object>
-          <figcaption>Figure 22 — Battery storage power per Kreis, snapshot 2026-05-01.</figcaption>
+          <figcaption>Figure 25 — Battery storage power per Kreis, snapshot 2026-05-01.</figcaption>
         </figure>
 
         <h3>BESS energy per Kreis</h3>
         <figure>
           <object type="image/svg+xml" data="assets/sample-bess-energy-map.svg" aria-label="BESS energy choropleth"></object>
-          <figcaption>Figure 23 — Battery storage energy capacity per Kreis (GWh). Pumpspeicher in Thüringen (Goldisthal, ~9.6 GWh × 4 PSS units) dominates.</figcaption>
+          <figcaption>Figure 26 — Battery storage energy capacity per Kreis (GWh). Pumpspeicher in Thüringen (Goldisthal, ~9.6 GWh × 4 PSS units) dominates.</figcaption>
         </figure>
 
         <h3>Duration distribution</h3>
         <figure>
           <object type="image/svg+xml" data="assets/sample-bess-duration.svg" aria-label="BESS duration histogram"></object>
-          <figcaption>Figure 24 — Capacity-weighted duration histogram (Batterie only). Bimodal: 1-h hybrid-PV cluster, 2-4 h grid-services cluster.</figcaption>
+          <figcaption>Figure 27 — Capacity-weighted duration histogram (Batterie only). Bimodal: 1-h hybrid-PV cluster, 2-4 h grid-services cluster.</figcaption>
         </figure>
 
         <h3>Storage technology mix</h3>
         <figure>
           <object type="image/svg+xml" data="assets/sample-bess-tech-mix.svg" aria-label="BESS tech mix"></object>
-          <figcaption>Figure 25 — Power (left) and usable energy capacity (right) split by storage technology.</figcaption>
+          <figcaption>Figure 28 — Power (left) and usable energy capacity (right) split by storage technology.</figcaption>
         </figure>
 
         <h3>Cumulative growth</h3>
         <figure>
           <object type="image/svg+xml" data="assets/sample-bess-growth.svg" aria-label="BESS cumulative growth"></object>
-          <figcaption>Figure 26 — Cumulative BESS power (purple) + energy (blue dashed) since 2010.</figcaption>
+          <figcaption>Figure 29 — Cumulative BESS power (purple) + energy (blue dashed) since 2010 (all-technologies aggregate).</figcaption>
         </figure>
 
         <h3>21 years of battery + storage growth</h3>
@@ -562,7 +606,7 @@ python -m marimo export html pv.py -o docs/pv.html</code></pre>
             <img src="assets/bess-2005-may2026.gif" alt="BESS power per Kreis 2005 to May 2026 animation" style="max-width:100%">
           </video>
           <figcaption>
-            Figure 27 — Yearly BESS power per Kreis, 2005 → May 2026.
+            Figure 30 — Yearly BESS power per Kreis, 2005 → May 2026.
             Also available:
             <a href="assets/bess-2005-may2026.mp4">.mp4</a> ·
             <a href="assets/bess-2005-may2026.gif">.gif</a>.

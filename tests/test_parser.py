@@ -198,6 +198,32 @@ class TestPrivateFlag:
         assert pp.is_private is False
 
 
+class TestBessSector:
+    """mastr_plot.bess_sector — battery-charts.de classification."""
+
+    def setup_method(self):
+        import importlib, sys
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        self.mp_mod = importlib.import_module("mastr_plot")
+
+    def test_hss_bounds(self):
+        assert self.mp_mod.bess_sector(5) == "HSS (<30 kWh)"
+        assert self.mp_mod.bess_sector(29.99) == "HSS (<30 kWh)"
+
+    def test_css_bounds(self):
+        assert self.mp_mod.bess_sector(30) == "CSS (30 kWh – 1 MWh)"
+        assert self.mp_mod.bess_sector(999.99) == "CSS (30 kWh – 1 MWh)"
+
+    def test_lss_bounds(self):
+        assert self.mp_mod.bess_sector(1000) == "LSS (≥1 MWh)"
+        assert self.mp_mod.bess_sector(4_000_000) == "LSS (≥1 MWh)"
+
+    def test_unknown_for_missing_or_zero(self):
+        assert self.mp_mod.bess_sector(None) == "unknown"
+        assert self.mp_mod.bess_sector(0) == "unknown"
+        assert self.mp_mod.bess_sector(-5) == "unknown"
+
+
 class TestBatteryUnit:
     """BatteryUnit.from_json — Energieträger 2496 only."""
 

@@ -149,8 +149,30 @@ MaStR carries 2.5 M storage records under `Energieträger=2496`. Top 200k by
 power covers everything from the 1 GW **GigaBattery Jänschwalde** (planned)
 down to ~10 kW home batteries.
 
-**Snapshot 2026-05-01:** 193 678 units · **7.86 GW / 98.9 GWh** active.
-Pipeline (+ planned-and-permitted): **25 GW / 2 565 GWh** by ~2028.
+**Snapshot 2026-05-01 (active):** 193 678 units · **12.97 GW / 936.9 GWh**.
+Pipeline (+ planned-and-permitted): **+8.2 GW LSS Li-ion** by ~ 2028.
+
+#### Three-sector split (battery-charts.de / BVES / EASE convention)
+
+![BESS sectors](fig/sample-bess-sectors.svg)
+
+| Sector | Threshold | Active 2026-05-01 |
+|---|---|---|
+| **HSS** Heimspeicher | < 30 kWh | 176 441 units · 2.47 GW · 2.54 GWh |
+| **CSS** Gewerblich | 30 kWh – 1 MWh | 16 659 units · 0.68 GW · 1.20 GWh |
+| **LSS** Großspeicher | ≥ 1 MWh | 569 units · **9.81 GW · 933 GWh** |
+
+Same thresholds as [battery-charts.de](https://battery-charts.de) (RWTH
+Aachen · Figgener et al.), the
+[BVES](https://www.bves.de/) market monitor, the
+[EASE](https://ease-storage.eu/) European Storage Market Monitor, and the
+EU SET-Plan flexibility scenarios. Useful for direct cross-reference.
+
+![BESS sector growth](fig/sample-bess-sector-growth.svg)
+
+HSS is the headcount story (176k households with PV+battery).
+LSS is the GW + GWh story (Pumpspeicher already at 6.5 GW / 927 GWh,
+plus the 8 GW Li-ion build-out coming).
 
 | Power split | Energy split |
 |---|---|

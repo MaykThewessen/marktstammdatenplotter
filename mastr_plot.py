@@ -176,6 +176,32 @@ def load_admin_units(gpkg_path: Path | None = None, demo_if_missing: bool = True
     return gdf, False
 
 
+#: BESS sector boundaries (kWh). Matches battery-charts.de (RWTH Aachen),
+#: BVES, and Figgener et al. conventions used across German + EU reporting.
+BESS_HSS_KWH_MAX = 30.0          # Home storage
+BESS_CSS_KWH_MAX = 1000.0        # Commercial / industrial
+# LSS = anything ≥ 1 MWh                       (Großspeicher)
+
+BESS_SECTORS = ["HSS (<30 kWh)", "CSS (30 kWh – 1 MWh)", "LSS (≥1 MWh)"]
+
+
+def bess_sector(energy_kwh: float | None) -> str:
+    """Classify a battery unit into HSS / CSS / LSS by usable kWh.
+
+    Matches the convention used by https://battery-charts.de (RWTH Aachen,
+    Figgener et al.) and reproduced by BVES, EASE, and the EU SET-Plan.
+    Unknown / zero capacity → 'unknown' so the caller can filter it
+    explicitly.
+    """
+    if energy_kwh is None or pd.isna(energy_kwh) or energy_kwh <= 0:
+        return "unknown"
+    if energy_kwh < BESS_HSS_KWH_MAX:
+        return BESS_SECTORS[0]
+    if energy_kwh < BESS_CSS_KWH_MAX:
+        return BESS_SECTORS[1]
+    return BESS_SECTORS[2]
+
+
 def load_bess(data_dir: Path | None = None, demo_if_missing: bool = False) -> tuple[pd.DataFrame, bool]:
     """Load BESS records as a tidy DataFrame.
 
@@ -206,6 +232,7 @@ def load_bess(data_dir: Path | None = None, demo_if_missing: bool = False) -> tu
     df["removal_date"] = pd.to_datetime(df["removal_date"]).dt.tz_localize(None)
     df["effective_date"] = df["install_date"].fillna(df["planned_date"])
     df["duration_h"] = df["energy_kwh"] / df["power_kw"].replace(0, np.nan)
+    df["sector"] = df["energy_kwh"].apply(bess_sector)
     return df, False
 
 

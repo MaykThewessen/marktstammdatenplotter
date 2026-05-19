@@ -7,6 +7,18 @@ All notable changes to this project. Follows
 ## [Unreleased]
 
 ### Added
+- **BESS three-sector split** (HSS / CSS / LSS) matching the
+  battery-charts.de (RWTH Aachen · Figgener et al.) convention also used
+  by BVES, EASE, and the EU SET-Plan. Boundaries: < 30 kWh / 30 kWh –
+  1 MWh / ≥ 1 MWh.
+  - `mastr_plot.bess_sector()` classifier + `BESS_SECTORS` constant.
+  - `load_bess()` adds a `sector` column.
+  - Three new sample SVGs: per-sector summary (power / energy /
+    headcount bars), cumulative-by-sector stacked area, per-sector
+    duration histogram.
+  - 4 new pytest cases for the classifier; 61 / 61 total green.
+  - README + docs: new sector subsection cross-referencing
+    battery-charts.de, BVES, EASE, EU SET-Plan.
 - **Battery + electricity storage (BESS) coverage.** Scrapes
   `Energieträger=2496` (Speicher) from the same `Stromerzeugung`
   endpoint — top 200 000 units by `Bruttoleistung` (`pixi run scrape-bess`).

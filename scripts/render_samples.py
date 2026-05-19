@@ -462,6 +462,140 @@ def render_wind_age(records, out_name):
     plt.close(fig)
 
 
+BESS_SECTOR_COLORS = {
+    "HSS (<30 kWh)": "#86efac",
+    "CSS (30 kWh – 1 MWh)": "#fbbf24",
+    "LSS (≥1 MWh)": "#a78bfa",
+}
+
+
+def render_bess_sector_charts(bess_df, out_summary: str, out_growth: str,
+                              out_duration: str):
+    """Three-sector (HSS / CSS / LSS) breakdown per battery-charts.de / BVES."""
+    from matplotlib.patches import Patch
+
+    snap = SNAP
+    active = bess_df[
+        (bess_df["install_date"] <= snap)
+        & (bess_df["removal_date"].isna() | (bess_df["removal_date"] > snap))
+    ].copy()
+
+    # -- 1. summary bars: power / energy / count per sector -------------------
+    agg = (
+        active.groupby("sector", observed=False)
+              .agg(n=("id", "size"),
+                   gw=("power_kw", lambda s: s.sum() / 1e6),
+                   gwh=("energy_kwh", lambda s: s.sum() / 1e6))
+              .reindex(mastr_plot.BESS_SECTORS).fillna(0.0)
+    )
+    fig, axs = plt.subplots(1, 3, figsize=(14, 4.2), dpi=120)
+    for ax, col, label, fmt in [
+        (axs[0], "gw", "Installed power [GW]", "{:.2f}"),
+        (axs[1], "gwh", "Usable energy [GWh]", "{:.1f}"),
+        (axs[2], "n", "Unit count", "{:,}"),
+    ]:
+        x = range(len(agg))
+        ax.bar(x, agg[col],
+               color=[BESS_SECTOR_COLORS[s] for s in agg.index],
+               edgecolor="#1e293b", linewidth=0.4)
+        ax.set_xticks(list(x))
+        ax.set_xticklabels(agg.index, rotation=15, ha="right")
+        ax.set_ylabel(label)
+        ax.grid(axis="y", alpha=0.3)
+        ymax = agg[col].max() if agg[col].max() > 0 else 1
+        for i, v in enumerate(agg[col]):
+            ax.text(i, v + ymax * 0.02,
+                    fmt.format(int(v) if col == "n" else v),
+                    ha="center", fontsize=9)
+        ax.set_title(label)
+    fig.suptitle(
+        f"BESS sector split — {snap.date()} "
+        "(battery-charts.de convention · RWTH Aachen / Figgener et al.)",
+        fontsize=13,
+    )
+    fig.tight_layout()
+    for d in (FIG, DOCS):
+        fig.savefig(d / out_summary, format="svg", bbox_inches="tight")
+    plt.close(fig)
+
+    # -- 2. cumulative power + energy stacked by sector -----------------------
+    df_h = bess_df[
+        bess_df["install_date"].notna()
+        & (bess_df["install_date"] >= "2010-01-01")
+    ].copy()
+    df_h["month"] = df_h["install_date"].dt.to_period("M")
+
+    def cum_pivot(col):
+        piv = (
+            df_h.groupby(["month", "sector"])[col]
+                .sum().div(1e6).unstack(fill_value=0).cumsum()
+        )
+        piv = piv[[c for c in mastr_plot.BESS_SECTORS if c in piv.columns]]
+        piv.index = piv.index.to_timestamp()
+        return piv
+
+    piv_p = cum_pivot("power_kw")
+    piv_e = cum_pivot("energy_kwh")
+
+    fig, axs = plt.subplots(1, 2, figsize=(14, 4.2), dpi=120)
+    for ax, piv, ylabel, title in [
+        (axs[0], piv_p, "Cumulative power [GW]",
+         "Cumulative BESS power by sector"),
+        (axs[1], piv_e, "Cumulative energy [GWh]",
+         "Cumulative BESS energy by sector"),
+    ]:
+        ax.stackplot(
+            piv.index, piv.T.values, labels=piv.columns,
+            colors=[BESS_SECTOR_COLORS[c] for c in piv.columns],
+            alpha=0.85, edgecolor="white", linewidth=0.4,
+        )
+        ax.set_ylabel(ylabel)
+        ax.set_title(title)
+        ax.legend(loc="upper left", fontsize=9)
+        ax.grid(alpha=0.3)
+    fig.suptitle("Battery + storage build-out by sector — HSS / CSS / LSS",
+                 fontsize=13)
+    fig.tight_layout()
+    for d in (FIG, DOCS):
+        fig.savefig(d / out_growth, format="svg", bbox_inches="tight")
+    plt.close(fig)
+
+    # -- 3. per-sector duration distribution ----------------------------------
+    b = bess_df[
+        (bess_df["storage_tech"] == "Batterie")
+        & bess_df["install_date"].notna()
+        & (bess_df["install_date"] <= snap)
+        & bess_df["duration_h"].notna()
+        & (bess_df["duration_h"] > 0)
+        & (bess_df["duration_h"] < 24)
+    ]
+    fig, axs = plt.subplots(1, 3, figsize=(15, 4.2), dpi=120)
+    for ax, sec in zip(axs, mastr_plot.BESS_SECTORS):
+        sub = b[b["sector"] == sec]
+        if len(sub) == 0:
+            ax.text(0.5, 0.5, "no data", transform=ax.transAxes, ha="center")
+            ax.set_title(sec)
+            continue
+        hist, edges = np.histogram(
+            sub["duration_h"], bins=np.linspace(0, 10, 50),
+            weights=sub["power_kw"] / 1000,
+        )
+        ax.bar(edges[:-1], hist, width=np.diff(edges), align="edge",
+               color=BESS_SECTOR_COLORS[sec],
+               edgecolor="#1e293b", linewidth=0.3)
+        ax.set_xlabel("Duration [h]")
+        ax.set_ylabel("Installed power per bin [MW]")
+        ax.set_title(
+            f"{sec}\n{len(sub):,} units · {sub['power_kw'].sum() / 1e6:.2f} GW"
+        )
+        ax.grid(alpha=0.3)
+    fig.suptitle("Per-sector BESS duration (Batterie only)", fontsize=13)
+    fig.tight_layout()
+    for d in (FIG, DOCS):
+        fig.savefig(d / out_duration, format="svg", bbox_inches="tight")
+    plt.close(fig)
+
+
 def render_bess_charts(bess_df, units, out_power: str, out_energy: str,
                        out_duration: str, out_techmix: str, out_growth: str):
     """Render all five BESS sample charts in one pass."""
@@ -806,6 +940,12 @@ def main():
             out_duration="sample-bess-duration.svg",
             out_techmix="sample-bess-tech-mix.svg",
             out_growth="sample-bess-growth.svg",
+        )
+        render_bess_sector_charts(
+            bess_df,
+            out_summary="sample-bess-sectors.svg",
+            out_growth="sample-bess-sector-growth.svg",
+            out_duration="sample-bess-sector-duration.svg",
         )
 
     print("Sample renders complete.")
