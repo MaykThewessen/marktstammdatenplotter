@@ -54,7 +54,7 @@ PRESETS = {
         "kind": "bess",
         "frame_prefix": "bess",
         "frames_dir": "fig/frames-bess",
-        "basename": "bess-2018-may2026",
+        "basename": "bess-2020-may2026",
         "cmap": "BuPu",
         "noun": "units",
         "title": "Installed battery storage energy in Germany",
@@ -62,7 +62,7 @@ PRESETS = {
         "agg_col": "energy_gwh",
         "agg_unit": "GWh",
         "legend_label": "Energy [GWh]",
-        "start_year": 2018,
+        "start_year": 2020,
     },
 }
 
@@ -85,13 +85,18 @@ DEFAULT_CADENCE = "yearly"
 def snapshot_dates(
     start_year: int = START_YEAR, cadence: str = DEFAULT_CADENCE,
 ) -> list[date]:
-    """Snapshot dates from start_year through END_YEAR, plus FINAL_FRAME.
+    """Snapshot dates from start_year through FINAL_FRAME.
 
     `cadence` controls inter-frame spacing:
-      yearly    — Jan-1 (~21 frames over 2005-2025)
-      halfyear  — Jan-1 + Jul-1 (~42 frames)
-      quarterly — Jan/Apr/Jul/Oct-1 (~84 frames)
-      monthly   — 1st of every month (~252 frames)
+      yearly    — Jan-1 (~22 frames over 2005-2026)
+      halfyear  — Jan-1 + Jul-1 (~43 frames)
+      quarterly — Jan/Apr/Jul/Oct-1 (~85 frames)
+      monthly   — 1st of every month (~256 frames)
+
+    Walks from start_year/Jan up to FINAL_FRAME in `step` months; ensures
+    FINAL_FRAME itself is the closing frame regardless of step alignment
+    (so cadence='monthly' includes Jan/Feb/Mar/Apr 2026 + May 2026 YTD
+    instead of jumping from Dec 2025 straight to May 2026).
     """
     months_step = {
         "yearly":     12,
@@ -104,13 +109,13 @@ def snapshot_dates(
     step = months_step[cadence]
     dates: list[date] = []
     y, m = start_year, 1
-    while date(y, m, 1) <= date(END_YEAR, 12, 1):
+    while date(y, m, 1) < FINAL_FRAME:
         dates.append(date(y, m, 1))
         m += step
         while m > 12:
             m -= 12
             y += 1
-    if FINAL_FRAME and FINAL_FRAME > dates[-1]:
+    if not dates or dates[-1] != FINAL_FRAME:
         dates.append(FINAL_FRAME)
     return dates
 
