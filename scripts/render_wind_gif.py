@@ -8,6 +8,7 @@ once on the final year so colors stay comparable across frames.
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -68,7 +69,14 @@ PRESETS = {
 
 START_YEAR = 2005
 END_YEAR = 2025          # last full year-start frame
-FINAL_FRAME = date(2026, 5, 1)   # extra frame past END_YEAR for YTD signal
+# Closing YTD frame tracks the current calendar day so re-renders against a
+# freshly refreshed open-mastr SQLite always end on real data, not a stale
+# hard-coded date. Override with the env var MASTR_FINAL_FRAME=YYYY-MM-DD
+# for reproducible renders.
+FINAL_FRAME = (
+    date.fromisoformat(os.environ["MASTR_FINAL_FRAME"])
+    if os.environ.get("MASTR_FINAL_FRAME") else date.today()
+)
 HOLD_FRAMES = 9
 
 # Cadence-aware framerate so all variants run ~8-12s end-to-end. Override
