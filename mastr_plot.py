@@ -795,7 +795,11 @@ def aggregate_bess_by_unit(
                 for i, n in admin_units["name"].items()
                 if n in KREIS_NAME_TO_AGS5
             }
-            anon_ags5 = anon["municipality_key"].astype(str).str[:5]
+            # Use `.str[:5]` directly so NaN municipality_key stays NaN
+            # (instead of being coerced to the literal string "nan", which
+            # would never match an AGS5 key and silently bypass the override
+            # without surfacing the gap).
+            anon_ags5 = anon["municipality_key"].str[:5]
             ags_override = anon_ags5.map(ags5_to_idx)
             anon_idx = ags_override.combine_first(anon_idx)
         pwr_name = anon.groupby(anon_idx)["power_kw"].sum() / 1e6
@@ -878,7 +882,11 @@ def aggregate_by_unit(
                 for i, n in admin_units["name"].items()
                 if n in KREIS_NAME_TO_AGS5
             }
-            anon_ags5 = anon["municipality_key"].astype(str).str[:5]
+            # Use `.str[:5]` directly so NaN municipality_key stays NaN
+            # (instead of being coerced to the literal string "nan", which
+            # would never match an AGS5 key and silently bypass the override
+            # without surfacing the gap).
+            anon_ags5 = anon["municipality_key"].str[:5]
             ags_override = anon_ags5.map(ags5_to_idx)
             anon_idx = ags_override.combine_first(anon_idx)
         pwr_name = anon.groupby(anon_idx)["power"].sum() / 1e6
