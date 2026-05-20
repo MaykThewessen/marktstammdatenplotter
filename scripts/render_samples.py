@@ -1597,13 +1597,16 @@ def render_bess_gwh_trajectory(out_name: str) -> None:
     MaStR under-registration: ~20-40% of residential batteries are never
     reported (Figgener et al. 2024).
     """
-    bulk_dir = mastr_plot.find_bulk_dir()
-    if bulk_dir is None or not (bulk_dir / "storage.parquet").exists():
-        print("Bulk storage.parquet not found — skipping GWh trajectory chart.")
+    # Prefer SQLite (full daily-fresh registry, ~2.5 M storage units) over the
+    # frozen Zenodo parquet snapshot. Falls back to JSON-scrape only as last
+    # resort; if no source resolves, we skip the chart cleanly.
+    try:
+        df, _ = mastr_plot.load_bess()
+    except FileNotFoundError:
+        print("No BESS source found — skipping GWh trajectory chart.")
         return
 
-    df = pd.read_parquet(bulk_dir / "storage.parquet")
-    b = df[df["storage_technology"] == "Batterie"].copy()
+    b = df[df["storage_tech"] == "Batterie"].copy()
 
     # Classify by usable energy into HSS / CSS / LSS (battery-charts.de thresholds).
     def _sector(kwh):
@@ -1615,7 +1618,7 @@ def render_bess_gwh_trajectory(out_name: str) -> None:
             return "CSS (30 kWh – 1 MWh)"
         return "LSS (≥1 MWh)"
 
-    b["_sector"] = b["usable_capacity_kwh"].apply(_sector)
+    b["_sector"] = b["energy_kwh"].apply(_sector)
     b = b[b["_sector"].notna()].copy()
 
     SECTORS = ["HSS (<30 kWh)", "CSS (30 kWh – 1 MWh)", "LSS (≥1 MWh)"]
@@ -1623,15 +1626,16 @@ def render_bess_gwh_trajectory(out_name: str) -> None:
     COLORS_PLAN = ["#bbf7d0", "#fde68a", "#ddd6fe"]
 
     # --- Historical: commissioned units from 2013 onwards ---
+    # load_bess() returns tz-naive install_date / removal_date / planned_date.
     hist = b[
-        b["commissioning_date"].notna()
-        & (b["commissioning_date"] >= pd.Timestamp("2013-01-01", tz="UTC"))
+        b["install_date"].notna()
+        & (b["install_date"] >= pd.Timestamp("2013-01-01"))
     ].copy()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        hist["_month"] = hist["commissioning_date"].dt.to_period("M")
+        hist["_month"] = hist["install_date"].dt.to_period("M")
     monthly_h = (
-        hist.groupby(["_month", "_sector"])["usable_capacity_kwh"]
+        hist.groupby(["_month", "_sector"])["energy_kwh"]
         .sum()
         .unstack(fill_value=0.0)
         .div(1e6)
@@ -1648,19 +1652,19 @@ def render_bess_gwh_trajectory(out_name: str) -> None:
 
     # --- Planned: entries with planned date but no commissioning date ---
     future = b[
-        b["commissioning_date"].isna()
-        & b["planned_commissioning_date"].notna()
-        & b["decommissioning_date"].isna()
-        & (b["planned_commissioning_date"] > last_date.to_timestamp().tz_localize("UTC"))
-        & (b["planned_commissioning_date"] <= pd.Timestamp("2030-12-31", tz="UTC"))
+        b["install_date"].isna()
+        & b["planned_date"].notna()
+        & b["removal_date"].isna()
+        & (b["planned_date"] > last_date.to_timestamp())
+        & (b["planned_date"] <= pd.Timestamp("2030-12-31"))
     ].copy()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        future["_month"] = future["planned_commissioning_date"].dt.to_period("M")
+        future["_month"] = future["planned_date"].dt.to_period("M")
     has_future = len(future) > 0
     if has_future:
         monthly_f = (
-            future.groupby(["_month", "_sector"])["usable_capacity_kwh"]
+            future.groupby(["_month", "_sector"])["energy_kwh"]
             .sum()
             .unstack(fill_value=0.0)
             .div(1e6)

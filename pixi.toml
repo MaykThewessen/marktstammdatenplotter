@@ -132,6 +132,15 @@ render-wind   = "python scripts/render_wind_gif.py wind"
 render-pv     = "python scripts/render_wind_gif.py pv"
 render-bess   = "python scripts/render_wind_gif.py bess"
 
+# Smoother animations via finer snapshot cadence. 43 / 85 / 253 frames
+# instead of 22 (yearly). Renders take proportionally longer.
+render-wind-halfyear  = "python scripts/render_wind_gif.py wind  --cadence halfyear"
+render-pv-halfyear    = "python scripts/render_wind_gif.py pv    --cadence halfyear"
+render-bess-halfyear  = "python scripts/render_wind_gif.py bess  --cadence halfyear"
+render-wind-monthly   = "python scripts/render_wind_gif.py wind  --cadence monthly"
+render-pv-monthly     = "python scripts/render_wind_gif.py pv    --cadence monthly"
+render-bess-monthly   = "python scripts/render_wind_gif.py bess  --cadence monthly"
+
 # Rebuild the per-Kreis JSON that drives the sortable docs table.
 build-kreise   = "python scripts/build_kreise_json.py"
 

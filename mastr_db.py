@@ -115,8 +115,16 @@ def count(tech: str, db_path: Path = DB_PATH) -> int:
 # does the final translation with no new branches needed there.
 # ---------------------------------------------------------------------------
 
-# open-mastr ArtDerSolaranlage → Zenodo location_type (best-effort, lossy for
-# water/parking_lot categories which open-mastr buckets under "Sonstige").
+# open-mastr ArtDerSolaranlage → Zenodo location_type. Lossy: open-mastr's
+# bulk-cleansed `ArtDerSolaranlage` only carries 4 values, collapsing two
+# Zenodo categories that downstream charts otherwise distinguish:
+#   - "Großparkplatz" (~93 rows in Zenodo, 0.002 % of registry)
+#   - "Gewässer"      (~33 rows)
+# Both end up tagged "Bauliche Anlagen (Sonstige)" → installation_type
+# "building_other". The raw `Lage` column exists in open-mastr's solar_extended
+# schema but is NULL for all 6.1 M rows — open-mastr does not preserve the
+# Zenodo CSV's finer granularity. Use `load_from_bulk(source="zenodo")` if you
+# need the parking-lot / water distinction.
 _PV_ART_TO_LOCATION = {
     "Gebäudesolaranlage":                                "Bauliche Anlagen (Hausdach, Gebäude und Fassade)",
     "Freiflächensolaranlage":                            "Freifläche",
@@ -171,6 +179,31 @@ _PIPELINE_DATE_COLS = (
 )
 
 
+def _backfill_psh_energy_from_zenodo(df: pd.DataFrame) -> pd.DataFrame:
+    """Backfill BESS `usable_capacity_kwh` from the Zenodo parquet snapshot
+    for rows where open-mastr returned NULL.
+
+    open-mastr's XML download has incomplete `NutzbareSpeicherkapazitaet` for
+    pumped hydro (PSH): ~85% of PSH units carry NULL despite known reservoir
+    sizes (e.g. Goldisthal's 9.6 GWh per turbine). Zenodo's 2025-02-09
+    snapshot fills the gap. This mutates `df` in place and returns it; if
+    the Zenodo parquet isn't present, returns the input unchanged.
+    """
+    zenodo_path = (
+        Path(__file__).resolve().parent / "BNetzA_MaStR" / "storage.parquet"
+    )
+    if not zenodo_path.exists():
+        return df
+    needs = df["usable_capacity_kwh"].isna() & df["mastr_id"].notna()
+    if not needs.any():
+        return df
+    z = pd.read_parquet(zenodo_path, columns=["mastr_id", "usable_capacity_kwh"])
+    z = z.dropna(subset=["mastr_id", "usable_capacity_kwh"]).set_index("mastr_id")
+    fill = df.loc[needs, "mastr_id"].map(z["usable_capacity_kwh"])
+    df.loc[needs, "usable_capacity_kwh"] = df.loc[needs, "usable_capacity_kwh"].fillna(fill)
+    return df
+
+
 def _ensure_market_actors(db_path: Path) -> None:
     """Strict-mode owner_name guard. Raises if market_actors is empty so
     callers get a clear diagnosis instead of silent NULL owner_name."""
@@ -184,7 +217,9 @@ def _ensure_market_actors(db_path: Path) -> None:
         )
 
 
-def load_for_pipeline(tech: str, db_path: Path = DB_PATH) -> pd.DataFrame:
+def load_for_pipeline(
+    tech: str, db_path: Path = DB_PATH, psh_backfill: bool = True,
+) -> pd.DataFrame:
     """Load `tech` shaped to the Zenodo-parquet column contract consumed by
     mastr_plot.load_from_bulk.
 
@@ -268,5 +303,12 @@ def load_for_pipeline(tech: str, db_path: Path = DB_PATH) -> pd.DataFrame:
     # Wind off_shore label: load_from_bulk inspects location_type for the
     # offshore boolean and then uses longitude split for Nordsee/Ostsee, so
     # nothing more to derive here.
+
+    # BESS: backfill PSH reservoir energy from Zenodo parquet when present.
+    # open-mastr's XML drops `NutzbareSpeicherkapazitaet` for ~85 % of PSH
+    # units (e.g. Goldisthal 9.6 GWh per turbine). Pass psh_backfill=False
+    # to skip if you want pure open-mastr output.
+    if tech == "bess" and psh_backfill:
+        df = _backfill_psh_energy_from_zenodo(df)
 
     return df

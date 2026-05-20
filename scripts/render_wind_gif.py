@@ -71,10 +71,45 @@ END_YEAR = 2025          # last full year-start frame
 FINAL_FRAME = date(2026, 5, 1)   # extra frame past END_YEAR for YTD signal
 HOLD_FRAMES = 9
 
+# Cadence-aware framerate so all variants run ~8-12s end-to-end. Override
+# at the CLI with --cadence yearly|halfyear|quarterly|monthly.
+CADENCE_FRAMERATE = {
+    "yearly":    "3",
+    "halfyear":  "5",
+    "quarterly": "8",
+    "monthly":   "18",
+}
+DEFAULT_CADENCE = "yearly"
 
-def snapshot_dates(start_year: int = START_YEAR) -> list[date]:
-    """Yearly Jan-1 frames from start_year through END_YEAR, plus FINAL_FRAME."""
-    dates = [date(y, 1, 1) for y in range(start_year, END_YEAR + 1)]
+
+def snapshot_dates(
+    start_year: int = START_YEAR, cadence: str = DEFAULT_CADENCE,
+) -> list[date]:
+    """Snapshot dates from start_year through END_YEAR, plus FINAL_FRAME.
+
+    `cadence` controls inter-frame spacing:
+      yearly    — Jan-1 (~21 frames over 2005-2025)
+      halfyear  — Jan-1 + Jul-1 (~42 frames)
+      quarterly — Jan/Apr/Jul/Oct-1 (~84 frames)
+      monthly   — 1st of every month (~252 frames)
+    """
+    months_step = {
+        "yearly":     12,
+        "halfyear":   6,
+        "quarterly":  3,
+        "monthly":    1,
+    }
+    if cadence not in months_step:
+        raise ValueError(f"unknown cadence {cadence!r}; expected one of {list(months_step)}")
+    step = months_step[cadence]
+    dates: list[date] = []
+    y, m = start_year, 1
+    while date(y, m, 1) <= date(END_YEAR, 12, 1):
+        dates.append(date(y, m, 1))
+        m += step
+        while m > 12:
+            m -= 12
+            y += 1
     if FINAL_FRAME and FINAL_FRAME > dates[-1]:
         dates.append(FINAL_FRAME)
     return dates
@@ -82,7 +117,7 @@ def snapshot_dates(start_year: int = START_YEAR) -> list[date]:
 
 FRAME_EXT = "webp"
 TARGET_HEIGHT = 1440
-FFMPEG_FRAMERATE = "3"
+FFMPEG_FRAMERATE = "3"  # overridden per-cadence at render time
 
 
 def _aggregate(records, units, snap, cfg):
@@ -104,7 +139,7 @@ def _noun_count(active, cfg):
     return f"{len(active):,} {cfg['noun']}{cfg['extra_subtitle']}"
 
 
-def render_frames(records, units, cfg) -> tuple[int, Path]:
+def render_frames(records, units, cfg, cadence: str = DEFAULT_CADENCE) -> tuple[int, Path]:
     frames = ROOT / cfg["frames_dir"]
     frames.mkdir(parents=True, exist_ok=True)
     for old in frames.iterdir():
@@ -115,7 +150,7 @@ def render_frames(records, units, cfg) -> tuple[int, Path]:
     agg_unit = cfg.get("agg_unit", "GW")
     legend_label = cfg.get("legend_label", "Capacity [GW]")
 
-    dates = snapshot_dates(cfg.get("start_year", START_YEAR))
+    dates = snapshot_dates(cfg.get("start_year", START_YEAR), cadence=cadence)
     agg_max, _ = _aggregate(records, units, dates[-1], cfg)
     positive = agg_max[agg_col][agg_max[agg_col] > 0].to_numpy()
     bins = mastr_plot.jenks_bins(positive, k=8)
@@ -149,12 +184,14 @@ def render_frames(records, units, cfg) -> tuple[int, Path]:
     return idx, frames
 
 
-def _assemble(frames: Path, cfg, ext: str, vcodec_args: list[str]):
+def _assemble(frames: Path, cfg, ext: str, vcodec_args: list[str],
+              cadence: str = DEFAULT_CADENCE):
     """Run ffmpeg over the frame sequence to produce `<basename>.<ext>`."""
     out_path = ROOT / "fig" / f"{cfg['basename']}.{ext}"
     docs_path = ROOT / "docs" / "assets" / f"{cfg['basename']}.{ext}"
+    framerate = CADENCE_FRAMERATE.get(cadence, FFMPEG_FRAMERATE)
     cmd = [
-        "ffmpeg", "-y", "-framerate", FFMPEG_FRAMERATE,
+        "ffmpeg", "-y", "-framerate", framerate,
         "-i", str(frames / f"{cfg['frame_prefix']}-%03d.{FRAME_EXT}"),
         *vcodec_args,
         str(out_path),
@@ -164,7 +201,7 @@ def _assemble(frames: Path, cfg, ext: str, vcodec_args: list[str]):
     return out_path
 
 
-def assemble_gif(frames: Path, cfg):
+def assemble_gif(frames: Path, cfg, cadence: str = DEFAULT_CADENCE):
     return _assemble(
         frames, cfg, "gif",
         [
@@ -174,29 +211,40 @@ def assemble_gif(frames: Path, cfg):
             "[s1][p]paletteuse=dither=bayer",
             "-loop", "0",
         ],
+        cadence=cadence,
     )
 
 
-def assemble_mp4(frames: Path, cfg):
+def assemble_mp4(frames: Path, cfg, cadence: str = DEFAULT_CADENCE):
     """H.264 MP4 — LinkedIn-native, ~30-50% smaller than the GIF.
 
     yuv420p + even-dimensions for maximum player compatibility.
     """
+    # MP4 fps filter normalises to a fixed display rate independent of
+    # cadence; bump it for high-cadence renders so the animation runs in a
+    # similar wall-clock window.
+    mp4_display_fps = {
+        "yearly":    10,
+        "halfyear":  12,
+        "quarterly": 18,
+        "monthly":   24,
+    }.get(cadence, 10)
     return _assemble(
         frames, cfg, "mp4",
         [
             "-vf",
-            f"scale=-2:{TARGET_HEIGHT}:flags=lanczos,fps=10,format=yuv420p",
+            f"scale=-2:{TARGET_HEIGHT}:flags=lanczos,fps={mp4_display_fps},format=yuv420p",
             "-c:v", "libx264",
             "-pix_fmt", "yuv420p",
             "-preset", "slow",
             "-crf", "18",
             "-movflags", "+faststart",
         ],
+        cadence=cadence,
     )
 
 
-def run_tech(tech: str):
+def run_tech(tech: str, cadence: str = DEFAULT_CADENCE):
     cfg = PRESETS[tech]
     if cfg["kind"] == "bess":
         records, demo = mastr_plot.load_bess()
@@ -206,11 +254,11 @@ def run_tech(tech: str):
     if demo:
         print(f"WARNING: rendering {tech} animation from demo data.")
     units, _ = mastr_plot.load_admin_units()
-    n, frames = render_frames(records, units, cfg)
-    print(f"Rendered {n} WebP frames for {tech}.")
-    gif = assemble_gif(frames, cfg)
+    n, frames = render_frames(records, units, cfg, cadence=cadence)
+    print(f"Rendered {n} WebP frames for {tech} (cadence={cadence}).")
+    gif = assemble_gif(frames, cfg, cadence=cadence)
     print(f"GIF written to {gif.relative_to(ROOT)} ({gif.stat().st_size / 1024:.0f} KiB)")
-    mp4 = assemble_mp4(frames, cfg)
+    mp4 = assemble_mp4(frames, cfg, cadence=cadence)
     print(f"MP4 written to {mp4.relative_to(ROOT)} ({mp4.stat().st_size / 1024:.0f} KiB)")
 
 
@@ -221,6 +269,15 @@ def main():
         choices=["wind", "pv", "bess", "both", "all"],
         help="Which animation to build (default: wind). 'both' = wind+pv, 'all' = wind+pv+bess.",
     )
+    parser.add_argument(
+        "--cadence", default=DEFAULT_CADENCE,
+        choices=list(CADENCE_FRAMERATE),
+        help=(
+            "Inter-frame spacing for the snapshot loop "
+            f"(default: {DEFAULT_CADENCE}). 'halfyear' / 'quarterly' / 'monthly' "
+            "produce smoother animations at the cost of more frames + longer render time."
+        ),
+    )
     args = parser.parse_args()
     if args.tech == "both":
         techs = ["wind", "pv"]
@@ -229,7 +286,7 @@ def main():
     else:
         techs = [args.tech]
     for t in techs:
-        run_tech(t)
+        run_tech(t, cadence=args.cadence)
 
 
 if __name__ == "__main__":
