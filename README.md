@@ -5,7 +5,7 @@
 
 | Wind | PV (all sizes) |
 |---|---|
-| ![Wind capacity 2005→May 2026](fig/wind-2005-may2026.gif) | ![PV capacity 2005→May 2026](fig/pv-2005-may2026.gif) |
+| ![Wind capacity 2005→May 2026](fig/wind-2005-may2026.gif) | ![PV capacity 2005→May 2026](fig/pv-2010-may2026.gif) |
 
 *Installed wind (left) and PV (right, full registry ~4.86 M plants, all sizes) capacity
 per Kreis, 2005 → May 2026. 22 yearly frames plus a final May 2026 YTD
