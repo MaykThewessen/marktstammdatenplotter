@@ -49,3 +49,6 @@ germany_admin_levels_*.osm
 # open-mastr SQLite snapshot (6+ GB, regenerable via `pixi run db-mastr-core`).
 # Symlinked from ~/.open-MaStR/data/sqlite/open-mastr.db so refresh works in place.
 data/mastr/
+
+# geoBoundaries cache (refetched on demand by bess_income_by_bundesland.py).
+data/geo/
