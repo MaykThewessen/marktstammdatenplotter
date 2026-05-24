@@ -289,7 +289,7 @@ def load_bess(data_dir: Path | None = None, demo_if_missing: bool = False,
     # Pre-compute normalised Kreis names — enables name-based fallback in
     # aggregate_bess_by_unit for residential rows with anonymised coords.
     if "landkreis" in df.columns:
-        df["landkreis_norm"] = df["landkreis"].apply(normalise_kreis_name)
+        df["landkreis_norm"] = normalise_kreis_series(df["landkreis"])
     return df, False
 
 
@@ -435,6 +435,18 @@ def normalise_kreis_name(s):
     s = _KREIS_DOT_WS_RE.sub(".", s)
     s = _KREIS_WS_RE.sub(" ", s).strip()
     return s
+
+
+def normalise_kreis_series(s: pd.Series) -> pd.Series:
+    """Vectorised wrapper around `normalise_kreis_name`.
+
+    Cardinality of Kreis names is ~400 across Germany while MaStR record
+    counts run into millions; normalising via `.apply` reapplies the regex
+    chain per row. Compute on the unique values once and map back.
+    """
+    uniq = s.dropna().unique()
+    lut = {v: normalise_kreis_name(v) for v in uniq}
+    return s.map(lut)
 
 
 def _resolve_bulk_source(
@@ -624,7 +636,7 @@ def load_from_bulk(
     # Add a normalised landkreis column for downstream name-based joins
     # (saves re-running normalise_kreis_name() at every aggregation step).
     if "landkreis" in df.columns:
-        df["landkreis_norm"] = df["landkreis"].apply(normalise_kreis_name)
+        df["landkreis_norm"] = normalise_kreis_series(df["landkreis"])
 
     # off_shore label for wind compatibility with the JSON-scrape schema.
     # BNetzA bulk parquet has no sea-specific label, so split Nordsee /
@@ -707,7 +719,7 @@ def aggregate_by_landkreis_name(
     by_kreis = sub.groupby("landkreis_norm")[value_col].sum() / divisor
     out = admin_units.copy()
     # admin_units `name` may or may not need normalising. Build a lookup.
-    key = out["name"].apply(normalise_kreis_name)
+    key = normalise_kreis_series(out["name"])
     out[out_col] = key.map(by_kreis).astype(float).fillna(0.0)
     return out, sub
 
@@ -779,7 +791,7 @@ def aggregate_bess_by_unit(
     # --- name-based join for anonymised rows (no coordinates) ---
     if (~has_coords).any() and "landkreis_norm" in sub.columns:
         anon = sub[~has_coords]
-        key = admin_units["name"].apply(normalise_kreis_name)
+        key = normalise_kreis_series(admin_units["name"])
         # MaStR landkreis text is just the city/county name (e.g. "Passau")
         # but BKG VG2500 has two entries — "Passau, Landkreis" and
         # "Passau, Kreisfreie Stadt" — that both normalise to "passau".
@@ -869,7 +881,7 @@ def aggregate_by_unit(
 
     if (~has_coords).any() and "landkreis_norm" in sub.columns:
         anon = sub[~has_coords]
-        key = admin_units["name"].apply(normalise_kreis_name)
+        key = normalise_kreis_series(admin_units["name"])
         name_to_idx = pd.Series(admin_units.index, index=key.values)
         name_to_idx = name_to_idx[~name_to_idx.index.duplicated(keep="first")]
         anon_idx = anon["landkreis_norm"].map(name_to_idx)
