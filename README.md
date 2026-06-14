@@ -3,15 +3,16 @@
 > Animated choropleth maps of installed wind & solar capacity in Germany,
 > driven by data scraped from the public Marktstammdatenregister (MaStR).
 
-| Wind | PV (all sizes) |
-|---|---|
-| ![Wind capacity 2005→May 2026](fig/wind-2005-may2026.gif) | ![PV capacity 2005→May 2026](fig/pv-2010-may2026.gif) |
+| Wind | PV (all sizes) | Battery storage |
+|---|---|---|
+| ![Wind capacity 2005→2026](fig/wind-2005-may2026.gif) | ![PV capacity 2010→2026](fig/pv-2010-may2026.gif) | ![BESS energy 2020→2026](fig/bess-2020-may2026.gif) |
 
-*Installed wind (left) and PV (right, full registry ~4.86 M plants, all sizes) capacity
-per Kreis, 2005 → May 2026. 22 yearly frames plus a final May 2026 YTD
-snapshot from the live registry. Fixed Jenks bins so colors stay comparable
-across years. Available as `.gif` (universal autoplay) and `.mp4`
-(LinkedIn-native, ~30 % smaller, sharper) — see [`fig/`](fig/).*
+*Installed wind (left), PV (center, full registry ~6.1 M plants, all sizes), and
+battery-storage energy (right) per Kreis. Monthly frames closing on a 2026-06 YTD
+snapshot from the live registry: wind from 2005, PV from 2010, BESS from 2020.
+Fixed Jenks bins so colors stay comparable across frames. Available as `.gif`
+(universal autoplay) and `.mp4` (LinkedIn-native, ~30 % smaller, sharper): see
+[`fig/`](fig/).*
 
 [![Docs](https://img.shields.io/badge/docs-github.io-blue?logo=github)](https://maykthewessen.github.io/marktstammdatenplotter/)
 [![Refresh CI](https://github.com/MaykThewessen/marktstammdatenplotter/actions/workflows/refresh-docs.yml/badge.svg)](https://github.com/MaykThewessen/marktstammdatenplotter/actions/workflows/refresh-docs.yml)
@@ -27,6 +28,19 @@ across years. Available as `.gif` (universal autoplay) and `.mp4`
 
 ---
 
+## At a glance
+
+| Property | Value |
+| --- | --- |
+| **Country** | Germany 🇩🇪 |
+| **Technologies** | Wind (onshore + offshore), solar PV, battery + pumped-hydro storage |
+| **Spatial unit** | ~400 *Kreise* (BKG VG2500), incl. Berlin / Hamburg / Bremen city-states, plus 2 sea zones (Nordsee, Ostsee) |
+| **Time coverage** | First commissioning ≈ 1980s to today; monthly frames from 2000-01 |
+| **Registry rows** | 42.6 k wind · 6.20 M solar · 2.58 M storage |
+| **Installed capacity** (active @ 2026-06-14) | Wind **80.3 GW**, PV **124.3 GWp**, storage **29.0 GW** |
+| **Data snapshot** | `Gesamtdatenexport_20260614` (daily-fresh open-mastr bulk) |
+| **Output** | Lossless WebP frames → animated GIF + H.264 MP4 |
+
 ## What it does
 
 The MaStR registry contains every grid-connected electricity-generating unit in
@@ -41,20 +55,23 @@ This repo:
    (`pixi run db-mastr-core` → `data/mastr/open-mastr.db`, ~6 GB,
    gitignored); fallback paths are the Zenodo parquet dump under
    `BNetzA_MaStR/` and the legacy JSON-API scrape (`parser.py`),
-2. **joins** turbines to German county polygons extracted from OSM,
-3. **renders** one choropleth PNG per month from the year 2000 to today, and
-4. **assembles** the frames into an animated GIF with `ffmpeg`.
+2. **joins** units to German county (*Kreis*) polygons from BKG VG2500,
+3. **renders** one choropleth frame per month from the year 2000 to today, and
+4. **assembles** the frames into an animated GIF + MP4 with `ffmpeg`.
 
 ### Data sources
 
-| Source | Refresh cadence | Coverage | Pixi task |
-|---|---|---|---|
-| open-mastr SQLite (default) | daily, full registry | 6.1 M PV + 42 k wind + 2.5 M storage | `pixi run db-mastr-core` |
-| Zenodo parquet | snapshot @ 2025-02-09 | full registry at cutoff | manual download to `BNetzA_MaStR/` |
-| MaStR JSON API | ad-hoc, top-N only | top 200 k by power | `pixi run scrape-non-pv`, `scrape-bess`, etc. |
+| Source | Retrieval mode | Freshness | Coverage | Entrypoint |
+|---|---|---|---|---|
+| **open-mastr SQLite** (default) | full-registry bulk (XML → SQLite), enum-decoded | daily | all techs: 6.2 M PV + 42.6 k wind + 2.58 M storage | `pixi run db-mastr-core` (or `db-mastr-all`) → `data/mastr/open-mastr.db` |
+| **Zenodo parquet** | frozen curated snapshot (corrected coords, manufacturer, hub height) | static (wind 2026-02-19, storage 2025-02-09) | full registry at cutoff | manual download to `BNetzA_MaStR/` |
+| **MaStR JSON API** | incremental delta (sort desc by commissioning date, stop at cutoff) or top-N by power | live, on demand | one energy type per call | `fetch_mastr.py`; `pixi run scrape-non-pv`, `scrape-bess` |
 
-Loaders auto-detect the strongest source available; explicit selection via
-`mastr_plot.load_from_bulk(tech, source="sqlite" \| "zenodo" \| "auto")`.
+`source="auto"` (the default) prefers the SQLite bulk when the DB is present,
+else falls back to the Zenodo parquet; force a path with
+`mastr_plot.load_from_bulk(tech, source="sqlite" \| "zenodo" \| "auto")`. The
+bulk path always re-pulls a **full snapshot** (no date window); use the JSON API
+when you only need an **incremental top-up** of recently commissioned units.
 
 ### Pipeline at a glance
 
