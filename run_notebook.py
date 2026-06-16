@@ -1,31 +1,29 @@
 """Run the wind notebook logic as a plain Python script."""
-# ── Cell 1: Load wind data from Zenodo CSV ────────────────────────────────────
+# ── Cell 1: Load wind data from the open-mastr SQLite snapshot ────────────────
 import pandas as pd
+import mastr_db
 
-ZENODO_CSV = "non-pv-data/goal100_mastr_wind_corrected_epsg_25832_2026_02_19/goal100_mastr_wind_corrected_epsg_25832_2026_02_19.csv"
-raw = pd.read_csv(ZENODO_CSV)
+# Bulk MaStR XML -> SQLite, refreshable to daily-fresh with `pixi run db-mastr-core`.
+# Replaces the frozen Zenodo CSV (record 18697247, v2026_02_19).
+raw = mastr_db.load("wind", columns=[
+    "Inbetriebnahmedatum", "DatumEndgueltigeStilllegung", "Nettonennleistung",
+    "Laengengrad", "Breitengrad", "Seelage",
+    "Bundesland", "Landkreis", "EinheitBetriebsstatus",
+])
 
 WIND = pd.DataFrame({
-    "install_date": pd.to_datetime(raw["datum_inbetriebnahme"], errors="coerce"),
-    "removal_date": pd.to_datetime(raw["datum_endgueltige_stilllegung"], errors="coerce"),
-    "power":        raw["nettonennleistung"],
-    "longitude":    raw["lon_x"],
-    "latitude":     raw["lat_y"],
+    "install_date": pd.to_datetime(raw["Inbetriebnahmedatum"], errors="coerce"),
+    "removal_date": pd.to_datetime(raw["DatumEndgueltigeStilllegung"], errors="coerce"),
+    "power":        raw["Nettonennleistung"],   # kW (net == gross for wind)
+    "longitude":    raw["Laengengrad"],
+    "latitude":     raw["Breitengrad"],
     "energy_type":  "Wind",
-    "off_shore": raw.apply(
-        lambda r: (
-            "Nordsee" if ("Nordsee" in str(r["bundesland"]) or
-                          (r["wind_an_land_oder_auf_see"] == "Windkraft auf See"
-                           and "Niedersachsen" in str(r["bundesland"])))
-            else "Ostsee" if ("Ostsee" in str(r["bundesland"]) or
-                              (r["wind_an_land_oder_auf_see"] == "Windkraft auf See"
-                               and "Mecklenburg" in str(r["bundesland"])))
-            else None
-        ), axis=1,
-    ),
-    "bundesland":   raw["bundesland"],
-    "landkreis":    raw["landkreis"],
-    "status":       raw["einheit_betriebsstatus"],
+    # Offshore zone straight from the decoded Seelage column (Nordsee / Ostsee /
+    # None); replaces the old bundesland-string heuristic.
+    "off_shore":    raw["Seelage"],
+    "bundesland":   raw["Bundesland"],
+    "landkreis":    raw["Landkreis"],
+    "status":       raw["EinheitBetriebsstatus"],
 })
 
 print(f"Loaded {len(WIND)} wind turbines")
