@@ -30,8 +30,27 @@ All notable changes to this project. Follows
 - Weekly CI workflow now refreshes the SQLite snapshot before rendering
   (`SQLITE_DATABASE_PATH` points open-mastr at the repo path; ZIP cleaned up
   post-parse to free disk).
+- **In-Planung (planned) pipeline in the animations.** `render_wind_gif.py`
+  extends frames past today to `PLANNED_HORIZON` (default 2028-12-31, env
+  `MASTR_PLANNED_HORIZON`) and folds planned units into those future frames
+  only, via `effective_date`. Future frames carry an "incl. planned pipeline"
+  title note; historical frames stay commissioned-only and unchanged.
+  `aggregate_by_unit` gains an `include_planned` flag (mirrors the BESS
+  aggregator); wind + PV `load_for_pipeline` now select
+  `GeplantesInbetriebnahmedatum`.
 
 ### Changed
+- Animation basenames renamed to reflect the extended range:
+  `wind-2005-may2026` → `wind-2005-2028-planned`,
+  `pv-2010-may2026` → `pv-2010-2028-planned`,
+  `bess-2020-may2026` → `bess-2020-2028-planned` (README + `docs/index.html`
+  references updated).
+- `load_from_bulk` derives wind `off_shore` from the authoritative MaStR
+  `seelage` column (Nordsee / Ostsee) when present, instead of a longitude
+  split. The column was already fetched by `load_for_pipeline` but unused.
+- `mastr_db.load()` / `load_for_pipeline()` convert only the date columns
+  actually present in the result, replacing `read_sql(parse_dates=…)` which
+  silently ignored names absent from a column whitelist.
 - `scripts/build_full_bess.py` rewritten as a thin
   `mastr_db.load_for_pipeline("bess") → parquet` pass; the Zenodo-base
   plus JSON-API delta merge is no longer needed (SQLite is daily-fresh).

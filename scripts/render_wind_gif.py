@@ -31,22 +31,24 @@ PRESETS = {
         "energy_type": "Wind",
         "frame_prefix": "wind",
         "frames_dir": "fig/frames",
-        "basename": "wind-2005-may2026",
+        "basename": "wind-2005-2028-planned",
         "cmap": "GnBu",
         "noun": "turbines",
         "title": "Installed wind capacity in Germany",
         "extra_subtitle": "",
+        "include_planned": True,
     },
     "pv": {
         "kind": "generation",
         "energy_type": "Solare Strahlungsenergie",
         "frame_prefix": "pv",
         "frames_dir": "fig/frames-pv",
-        "basename": "pv-2010-may2026",
+        "basename": "pv-2010-2028-planned",
         "cmap": "YlOrRd",
         "noun": "plants",
         "title": "Installed PV capacity in Germany",
         "extra_subtitle": "",
+        "include_planned": True,
         "agg_unit": "GWp",
         "legend_label": "Capacity [GWp]",
         "start_year": 2010,
@@ -55,11 +57,12 @@ PRESETS = {
         "kind": "bess",
         "frame_prefix": "bess",
         "frames_dir": "fig/frames-bess",
-        "basename": "bess-2020-may2026",
+        "basename": "bess-2020-2028-planned",
         "cmap": "BuPu",
         "noun": "units",
         "title": "Installed battery storage energy in Germany",
         "extra_subtitle": "",
+        "include_planned": True,
         "agg_col": "energy_gwh",
         "agg_unit": "GWh",
         "legend_label": "Energy [GWh]",
@@ -77,6 +80,15 @@ FINAL_FRAME = (
     date.fromisoformat(os.environ["MASTR_FINAL_FRAME"])
     if os.environ.get("MASTR_FINAL_FRAME") else date.today()
 )
+# When a preset enables `include_planned`, the animation runs past FINAL_FRAME
+# up to this horizon so the In-Planung pipeline (units with a planned, not yet
+# real, commissioning date) becomes visible. End of 2028 captures ~95 % of the
+# wind pipeline and drops the sparse 2029-2056 tail. Override for reproducible
+# or longer renders with MASTR_PLANNED_HORIZON=YYYY-MM-DD.
+PLANNED_HORIZON = (
+    date.fromisoformat(os.environ["MASTR_PLANNED_HORIZON"])
+    if os.environ.get("MASTR_PLANNED_HORIZON") else date(2028, 12, 31)
+)
 HOLD_FRAMES = 9
 
 # Cadence-aware framerate so all variants run ~8-12s end-to-end. Override
@@ -92,8 +104,9 @@ DEFAULT_CADENCE = "yearly"
 
 def snapshot_dates(
     start_year: int = START_YEAR, cadence: str = DEFAULT_CADENCE,
+    end_frame: date = FINAL_FRAME,
 ) -> list[date]:
-    """Snapshot dates from start_year through FINAL_FRAME.
+    """Snapshot dates from start_year through end_frame.
 
     `cadence` controls inter-frame spacing:
       yearly    — Jan-1 (~22 frames over 2005-2026)
@@ -105,6 +118,10 @@ def snapshot_dates(
     FINAL_FRAME itself is the closing frame regardless of step alignment
     (so cadence='monthly' includes Jan/Feb/Mar/Apr 2026 + May 2026 YTD
     instead of jumping from Dec 2025 straight to May 2026).
+
+    When `end_frame` > FINAL_FRAME (planned-pipeline mode), the same cadence
+    grid continues past today up to `end_frame`; those future dates are the
+    frames in which In-Planung units are folded in.
     """
     months_step = {
         "yearly":     12,
@@ -125,6 +142,18 @@ def snapshot_dates(
             y += 1
     if not dates or dates[-1] != FINAL_FRAME:
         dates.append(FINAL_FRAME)
+    # Future pipeline frames: continue the grid past today up to end_frame.
+    if end_frame > FINAL_FRAME:
+        while date(y, m, 1) <= end_frame:
+            d = date(y, m, 1)
+            if d > FINAL_FRAME:
+                dates.append(d)
+            m += step
+            while m > 12:
+                m -= 12
+                y += 1
+        if dates[-1] != end_frame:
+            dates.append(end_frame)
     return dates
 
 
@@ -133,11 +162,13 @@ TARGET_HEIGHT = 1440
 FFMPEG_FRAMERATE = "3"  # overridden per-cadence at render time
 
 
-def _aggregate(records, units, snap, cfg):
+def _aggregate(records, units, snap, cfg, include_planned: bool = False):
     """Dispatch on cfg['kind'] — generation tech or BESS."""
     if cfg["kind"] == "bess":
-        return mastr_plot.aggregate_bess_by_unit(records, units, snap)
-    return mastr_plot.aggregate_by_unit(records, units, snap, cfg["energy_type"])
+        return mastr_plot.aggregate_bess_by_unit(
+            records, units, snap, include_planned=include_planned)
+    return mastr_plot.aggregate_by_unit(
+        records, units, snap, cfg["energy_type"], include_planned=include_planned)
 
 
 def _active_total(active, cfg):
@@ -163,17 +194,28 @@ def render_frames(records, units, cfg, cadence: str = DEFAULT_CADENCE) -> tuple[
     agg_unit = cfg.get("agg_unit", "GW")
     legend_label = cfg.get("legend_label", "Capacity [GW]")
 
-    dates = snapshot_dates(cfg.get("start_year", START_YEAR), cadence=cadence)
-    agg_max, _ = _aggregate(records, units, dates[-1], cfg)
+    # Planned-pipeline mode: run frames past today up to PLANNED_HORIZON and
+    # fold In-Planung units into those future frames only. Historical frames
+    # (snap <= FINAL_FRAME) stay commissioned-only, so they are unchanged.
+    planned = cfg.get("include_planned", False)
+    end_frame = PLANNED_HORIZON if planned else FINAL_FRAME
+    dates = snapshot_dates(cfg.get("start_year", START_YEAR), cadence=cadence,
+                           end_frame=end_frame)
+
+    # Bins from the densest (last) frame so colours stay comparable across the
+    # animation; in planned mode that frame already includes the full pipeline.
+    agg_max, _ = _aggregate(records, units, dates[-1], cfg, include_planned=planned)
     positive = agg_max[agg_col][agg_max[agg_col] > 0].to_numpy()
     bins = mastr_plot.jenks_bins(positive, k=8)
 
     idx = 0
     for snap in dates:
-        agg, active = _aggregate(records, units, snap, cfg)
+        is_future = planned and snap > FINAL_FRAME
+        agg, active = _aggregate(records, units, snap, cfg, include_planned=is_future)
         total = _active_total(active, cfg)
+        note = "  ·  incl. planned pipeline" if is_future else ""
         title = (
-            f"{cfg['title']} — {snap.isoformat()}\n"
+            f"{cfg['title']} — {snap.isoformat()}{note}\n"
             f"{_noun_count(active, cfg)} · {round(total, 1)} {agg_unit}"
         )
         fig = mastr_plot.plot_choropleth(

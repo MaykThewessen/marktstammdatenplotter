@@ -5,11 +5,12 @@
 
 | Wind | PV (all sizes) | Battery storage |
 |---|---|---|
-| ![Wind capacity 2005→2026](fig/wind-2005-may2026.gif) | ![PV capacity 2010→2026](fig/pv-2010-may2026.gif) | ![BESS energy 2020→2026](fig/bess-2020-may2026.gif) |
+| ![Wind capacity 2005→2028 incl. planned](fig/wind-2005-2028-planned.gif) | ![PV capacity 2010→2028 incl. planned](fig/pv-2010-2028-planned.gif) | ![BESS energy 2020→2028 incl. planned](fig/bess-2020-2028-planned.gif) |
 
 *Installed wind (left), PV (center, full registry ~6.1 M plants, all sizes), and
 battery-storage energy (right) per Kreis. Monthly frames closing on a 2026-06 YTD
-snapshot from the live registry: wind from 2005, PV from 2010, BESS from 2020.
+snapshot from the live registry, then projected to end-2028 with the In-Planung
+pipeline folded in (flagged in-frame): wind from 2005, PV from 2010, BESS from 2020.
 Fixed Jenks bins so colors stay comparable across frames. Available as `.gif`
 (universal autoplay) and `.mp4` (LinkedIn-native, ~30 % smaller, sharper): see
 [`fig/`](fig/).*

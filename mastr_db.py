@@ -35,6 +35,29 @@ EXTENDED_TABLES = {
     "biomass": "biomass_extended",
 }
 
+# Date columns load() parses to datetime. Only the ones actually present in the
+# result are converted (see _parse_date_cols) — passing absent names to
+# read_sql's parse_dates is silently ignored, which hides typos and column-
+# whitelist mistakes, so we convert explicitly instead.
+_LOAD_DATE_COLS = (
+    "Inbetriebnahmedatum",
+    "GeplantesInbetriebnahmedatum",
+    "DatumEndgueltigeStilllegung",
+    "Meldedatum",
+)
+
+
+def _parse_date_cols(df: pd.DataFrame, candidates: tuple[str, ...]) -> pd.DataFrame:
+    """Convert each `candidates` column that exists in `df` to datetime.
+
+    Explicit replacement for read_sql(parse_dates=...), which quietly skips
+    names absent from the query result. Mutates and returns `df`.
+    """
+    for col in candidates:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], errors="coerce")
+    return df
+
 
 def engine(db_path: Path = DB_PATH) -> Engine:
     if not db_path.exists():
@@ -64,12 +87,8 @@ def load(
     sql = f"SELECT {cols} FROM {table}"
     if where:
         sql += f" WHERE {where}"
-    return pd.read_sql(sql, con=engine(db_path), parse_dates=[
-        "Inbetriebnahmedatum",
-        "GeplantesInbetriebnahmedatum",
-        "DatumEndgueltigeStilllegung",
-        "Meldedatum",
-    ])
+    df = pd.read_sql(sql, con=engine(db_path))
+    return _parse_date_cols(df, _LOAD_DATE_COLS)
 
 
 def load_geo(
@@ -240,6 +259,7 @@ def load_for_pipeline(
         sql = f"""
         SELECT
             {common},
+            e.GeplantesInbetriebnahmedatum AS planned_commissioning_date,
             e.WindAnLandOderAufSee AS location_type,
             e.Seelage              AS seelage,
             m.Firmenname           AS owner_name,
@@ -251,6 +271,7 @@ def load_for_pipeline(
         sql = f"""
         SELECT
             {common},
+            e.GeplantesInbetriebnahmedatum   AS planned_commissioning_date,
             e.ArtDerSolaranlage              AS art_solaranlage,
             e.Nutzungsbereich                AS usage_type,
             e.Hauptausrichtung               AS orientation,
@@ -287,7 +308,8 @@ def load_for_pipeline(
         {energy_join}
         """
 
-    df = pd.read_sql(sql, con=eng, parse_dates=list(_PIPELINE_DATE_COLS))
+    df = pd.read_sql(sql, con=eng)
+    df = _parse_date_cols(df, _PIPELINE_DATE_COLS)
 
     # PV-only post-processing: translate enum strings to Zenodo-style values
     # so load_from_bulk's loc_map / usage_map / facing_map matches verbatim.

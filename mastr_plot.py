@@ -638,10 +638,13 @@ def load_from_bulk(
     if "landkreis" in df.columns:
         df["landkreis_norm"] = normalise_kreis_series(df["landkreis"])
 
-    # off_shore label for wind compatibility with the JSON-scrape schema.
-    # BNetzA bulk parquet has no sea-specific label, so split Nordsee /
-    # Ostsee by longitude (Nordsee is west of ~10° E, Ostsee east of it).
-    if tech == "wind" and "location_type" in df.columns:
+    # off_shore label for wind. The open-mastr SQLite carries an authoritative
+    # `seelage` column (Nordsee / Ostsee, MaStR-assigned; NULL for onshore) —
+    # prefer it. The Zenodo parquet has no such column, so fall back to a
+    # longitude split (Nordsee west of ~10 deg E, Ostsee east) for offshore.
+    if tech == "wind" and "seelage" in df.columns and df["seelage"].notna().any():
+        df["off_shore"] = df["seelage"]
+    elif tech == "wind" and "location_type" in df.columns:
         is_offshore = df["location_type"] == "Windkraft auf See"
         df["off_shore"] = None
         if is_offshore.any():
@@ -649,8 +652,8 @@ def load_from_bulk(
                 df.loc[is_offshore & (df["longitude"] < 10.0), "off_shore"] = "Nordsee"
                 df.loc[is_offshore & (df["longitude"] >= 10.0), "off_shore"] = "Ostsee"
             # Fall back to Nordsee for rows with no coordinates (shouldn't
-            # happen for offshore — MaStR keeps offshore lat/lon — but
-            # avoids dropping bars from the offshore chart).
+            # happen for offshore: MaStR keeps offshore lat/lon) so we avoid
+            # dropping bars from the offshore chart.
             df.loc[is_offshore & df["off_shore"].isna(), "off_shore"] = "Nordsee"
 
     # BESS-style helper columns so aggregate_bess_by_unit / sector / etc.
@@ -845,6 +848,8 @@ def aggregate_by_unit(
     admin_units,
     plot_date: date,
     energy_type: str,
+    *,
+    include_planned: bool = False,
 ):
     """Aggregate active plants to admin units, summing power (GW).
 
@@ -852,14 +857,24 @@ def aggregate_by_unit(
     join for anonymised rows (no lat/lon but `landkreis_norm` present). For
     PV in the bulk dump this recovers ~95% of installed capacity that the
     spatial-only path drops.
+
+    `include_planned=True` counts a unit as active once its `effective_date`
+    (= install_date, falling back to planned commissioning date) precedes
+    `plot_date`. With it False (default) only commissioned units count, so
+    historical frames are unaffected. Mirrors aggregate_bess_by_unit.
     """
     import geopandas as gpd
 
     admin_units = _ensure_wgs84(admin_units)
     ts = pd.Timestamp(plot_date)
+    date_col = (
+        "effective_date"
+        if include_planned and "effective_date" in records.columns
+        else "install_date"
+    )
     sub = records[
         (records["energy_type"] == energy_type)
-        & (records["install_date"] <= ts)
+        & (records[date_col] <= ts)
         & (records["removal_date"].isna() | (records["removal_date"] > ts))
     ].copy()
     if sub.empty:
