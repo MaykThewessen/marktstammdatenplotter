@@ -31,13 +31,14 @@ open-mastr = ">=0.17"
 [tasks]
 # Bulk download of MaStR into SQLite at ~/.open-MaStR/data/sqlite/open-mastr.db.
 # Single-tech variants avoid the multi-GB full pull.
-db-mastr-wind    = "python -c \"from open_mastr import Mastr; Mastr().download(data=['wind'])\""
-db-mastr-solar   = "python -c \"from open_mastr import Mastr; Mastr().download(data=['solar'])\""
-db-mastr-storage = "python -c \"from open_mastr import Mastr; Mastr().download(data=['storage'])\""
-db-mastr-market  = "python -c \"from open_mastr import Mastr; Mastr().download(data=['market'])\""
-db-mastr-storage-units = "python -c \"from open_mastr import Mastr; Mastr().download(data=['storage_units'])\""
-db-mastr-core    = "python -c \"from open_mastr import Mastr; Mastr().download(data=['wind','solar','storage','storage_units','market'])\""
-db-mastr-all     = "python -c \"from open_mastr import Mastr; Mastr().download()\""
+# Wrapper relabels open-mastr's tqdm bar so the rate shows MB/s next to the ETA.
+db-mastr-wind    = "python scripts/mastr_download.py wind"
+db-mastr-solar   = "python scripts/mastr_download.py solar"
+db-mastr-storage = "python scripts/mastr_download.py storage"
+db-mastr-market  = "python scripts/mastr_download.py market"
+db-mastr-storage-units = "python scripts/mastr_download.py storage_units"
+db-mastr-core    = "python scripts/mastr_download.py wind solar storage storage_units market"
+db-mastr-all     = "python scripts/mastr_download.py"
 
 # One-shot scrapes — uses the README's curl recipes.
 scrape-non-pv = """
