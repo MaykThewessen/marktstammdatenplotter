@@ -100,6 +100,50 @@ def _partial_download_with_progress(save_path: str, url: str, bulk_data_list: li
 _bulk.tqdm = _tqdm_mb
 _bulk.partial_download_with_unzip_http = _partial_download_with_progress
 
+
+# --- combustion-table parse fix -------------------------------------------
+# open-mastr aborts the entire combustion table (gas/coal/oil, EinheitenVerbrennung)
+# when a catalog column holds multiple comma-separated codes: WeitereBrennstoffe
+# values like "2442, 2442" crash replace_mastr_katalogeintraege's .astype("float")
+# and leave combustion_extended at 0 rows (logged as ERROR only, download exits 0).
+# Re-driving the catalog casts through pd.to_numeric(errors="coerce") drops the
+# unparseable multi-code value (a column we don't use) and lets the table parse.
+import pandas as pd  # noqa: E402
+import open_mastr.xml_download.utils_cleansing_bulk as _ucb  # noqa: E402
+
+
+def _robust_replace_katalogeintraege(zipped_xml_file_path, df):
+    katalogwerte = _ucb.create_katalogwerte_from_bulk_download(zipped_xml_file_path)
+    for column_name in df.columns:
+        if column_name in _ucb.columns_replace_list:
+            col = df[column_name]
+            if col.dtype == "O":
+                df[column_name] = (
+                    col.str.split(",", expand=True)
+                    .apply(
+                        lambda x: pd.to_numeric(x.str.strip(), errors="coerce").astype(
+                            "Int64"
+                        )
+                    )
+                    .map(katalogwerte.get)
+                    .agg(lambda d: ",".join(i for i in d if isinstance(i, str)), axis=1)
+                    .replace("", None)
+                )
+            else:
+                df[column_name] = (
+                    pd.to_numeric(col, errors="coerce").astype("Int64").map(katalogwerte)
+                )
+    return df
+
+
+_ucb.replace_mastr_katalogeintraege = _robust_replace_katalogeintraege
+# the writer module imports the symbol by value, so patch its reference too
+import open_mastr.xml_download.utils_write_to_database as _uw  # noqa: E402
+
+if hasattr(_uw, "replace_mastr_katalogeintraege"):
+    _uw.replace_mastr_katalogeintraege = _robust_replace_katalogeintraege
+# --------------------------------------------------------------------------
+
 from open_mastr import Mastr  # noqa: E402  (import after the patches are applied)
 
 
