@@ -64,15 +64,35 @@ This repo:
 
 | Source | Retrieval mode | Freshness | Coverage | Entrypoint |
 |---|---|---|---|---|
-| **open-mastr SQLite** (default) | full-registry bulk (XML → SQLite), enum-decoded | daily | all techs: 6.2 M PV + 42.6 k wind + 2.58 M storage | `pixi run db-mastr-core` (or `db-mastr-all`) → `data/mastr/open-mastr.db` |
+| **open-mastr parquet** (default) | full-registry bulk (XML → parquet), enum-decoded | daily | all techs: 6.2 M PV + 42.6 k wind + 2.58 M storage | `pixi run db-mastr-core` (or `db-mastr-all`) → `data/mastr/parquet/` |
+| **open-mastr SQLite** (legacy) | same, via open-mastr's own SQL writer | daily | as above | `pixi run db-mastr-core --sqlite` → `data/mastr/open-mastr.db` |
 | **Zenodo parquet** | frozen curated snapshot (corrected coords, manufacturer, hub height) | static (wind 2026-02-19, storage 2025-02-09) | full registry at cutoff | manual download to `BNetzA_MaStR/` |
 | **MaStR JSON API** | incremental delta (sort desc by commissioning date, stop at cutoff) or top-N by power | live, on demand | one energy type per call | `fetch_mastr.py`; `pixi run scrape-non-pv`, `scrape-bess` |
 
-`source="auto"` (the default) prefers the SQLite bulk when the DB is present,
-else falls back to the Zenodo parquet; force a path with
-`mastr_plot.load_from_bulk(tech, source="sqlite" \| "zenodo" \| "auto")`. The
-bulk path always re-pulls a **full snapshot** (no date window); use the JSON API
-when you only need an **incremental top-up** of recently commissioned units.
+`source="auto"` (the default) prefers the parquet store, then the SQLite DB,
+then the Zenodo parquet; force a path with
+`mastr_plot.load_from_bulk(tech, source="parquet" \| "sqlite" \| "zenodo" \| "auto")`.
+The bulk path always re-pulls a **full snapshot** (no date window); use the JSON
+API when you only need an **incremental top-up** of recently commissioned units.
+
+#### Why parquet, measured
+
+`pixi run db-mastr-core` writes parquet directly and never materialises the
+SQLite DB. On the 2026-06-16 export (34 tables, 38.0 M rows):
+
+| Store | Size | PV pipeline load (6.2 M rows) | BESS | Wind |
+|---|---|---|---|---|
+| SQLite | 11.32 GB | 107 s | 38,7 s | 2,0 s |
+| **parquet + zstd** | **1.30 GB** | **3,6 s** | 1,4 s | 0,1 s |
+
+8,7x smaller and ~30x faster: zstd over columnar chunks for the size, and the
+row-store/column-store split for the speed — SQLite stores all 96 columns of a
+solar row contiguously, so projecting 16 still reads the other 80. Row counts,
+primary keys and per-column values are verified equal between the two stores in
+`tests/test_parquet_store.py`.
+
+Already have an `open-mastr.db`? `pixi run db-mastr-parquet` converts it in
+~1.5 min and leaves the original alone.
 
 ### Pipeline at a glance
 
@@ -470,6 +490,8 @@ the GIF loops. Drop `-loop 0` if you want a one-shot.
 |------------|---------|
 | `parser.py` | `PowerPlant` dataclass + JSON-to-record decoder |
 | `mastr_plot.py` | Shared helpers (load, aggregate, choropleth) + synthetic demo data |
+| `mastr_parquet.py` | Parquet store: DuckDB-backed loaders + `convert_from_sqlite()` |
+| `mastr_db.py` | Legacy open-mastr SQLite loader; owns the shared `pipeline_sql()` |
 | `pixi.toml` | Reproducible env: `pixi install` then `pixi run pv-edit` / `wind-edit` / `docs-build` |
 | `pv.py` | Marimo notebook — interactive PV explorer |
 | `wind.py` | Marimo notebook — interactive wind explorer |

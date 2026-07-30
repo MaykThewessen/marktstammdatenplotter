@@ -46,8 +46,11 @@ germany_admin_levels_*.osm
 # Claude Code local config
 .claude/
 
-# open-mastr SQLite snapshot (6+ GB, regenerable via `pixi run db-mastr-core`).
-# Symlinked from ~/.open-MaStR/data/sqlite/open-mastr.db so refresh works in place.
+# open-mastr snapshots, both regenerable via `pixi run db-mastr-core`:
+#   data/mastr/parquet/      1.3 GB zstd parquet store (the default path)
+#   data/mastr/open-mastr.db 11 GB legacy SQLite, only written with --sqlite.
+# The DB is symlinked from ~/.open-MaStR/data/sqlite/open-mastr.db so
+# open-mastr's own writer refreshes the in-repo copy.
 data/mastr/
 
 # geoBoundaries cache (refetched on demand by bess_income_by_bundesland.py).

@@ -236,27 +236,27 @@ def _ensure_market_actors(db_path: Path) -> None:
         )
 
 
-def load_for_pipeline(
-    tech: str, db_path: Path = DB_PATH, psh_backfill: bool = True,
-) -> pd.DataFrame:
-    """Load `tech` shaped to the Zenodo-parquet column contract consumed by
-    mastr_plot.load_from_bulk.
+def pipeline_sql(tech: str, *, storage_units_available: bool = True) -> str:
+    """Build the SELECT that shapes `tech` to the Zenodo-parquet contract.
 
-    tech ∈ {"wind", "pv", "bess"}.
+    Backend-agnostic: the table names are plain identifiers, so this runs
+    verbatim against SQLite (via `engine()`) or against DuckDB views over the
+    parquet store (see `mastr_parquet.connect`). Keeping one copy of the SQL is
+    what makes the two backends provably equivalent.
 
-    Returns a DataFrame with columns that match the bulk-parquet schema, so
-    downstream rename + decoration in load_from_bulk works unchanged. Strict
-    mode: raises if market_actors is empty (owner_name JOIN would be all NULL).
+    storage_units_available: BESS only. `NutzbareSpeicherkapazitaet` sits in
+    `storage_units` (one-to-one with storage_extended via VerknuepfteEinheit),
+    NOT in storage_extended where the column is always NULL. Pass False to
+    skip the JOIN when that table is absent or empty (e.g. a fresh download of
+    only `data=['storage']`).
     """
     if tech not in ("wind", "pv", "bess"):
         raise ValueError(f"unknown tech {tech!r}; expected wind|pv|bess")
 
-    _ensure_market_actors(db_path)
-    eng = engine(db_path)
     common = ",\n    ".join(f"e.{c}" for c in _PIPELINE_COMMON_COLS)
 
     if tech == "wind":
-        sql = f"""
+        return f"""
         SELECT
             {common},
             e.GeplantesInbetriebnahmedatum AS planned_commissioning_date,
@@ -267,8 +267,8 @@ def load_for_pipeline(
         FROM wind_extended e
         LEFT JOIN market_actors m ON m.MastrNummer = e.AnlagenbetreiberMastrNummer
         """
-    elif tech == "pv":
-        sql = f"""
+    if tech == "pv":
+        return f"""
         SELECT
             {common},
             e.GeplantesInbetriebnahmedatum   AS planned_commissioning_date,
@@ -280,35 +280,35 @@ def load_for_pipeline(
         FROM solar_extended e
         LEFT JOIN market_actors m ON m.MastrNummer = e.AnlagenbetreiberMastrNummer
         """
-    else:  # bess
-        # NutzbareSpeicherkapazitaet sits in `storage_units` (one-to-one with
-        # storage_extended via VerknuepfteEinheit), NOT directly in
-        # storage_extended where the column is always NULL. Skip the JOIN
-        # gracefully if storage_units is empty (e.g. fresh download of only
-        # `data=['storage']`).
-        has_storage_units = (
-            pd.read_sql("SELECT COUNT(*) AS n FROM storage_units", con=eng).iloc[0, 0] > 0
-        )
-        if has_storage_units:
-            energy_select  = "su.NutzbareSpeicherkapazitaet AS usable_capacity_kwh"
-            energy_join    = ("LEFT JOIN storage_units su "
-                              "ON su.VerknuepfteEinheit = e.EinheitMastrNummer")
-        else:
-            energy_select  = "NULL AS usable_capacity_kwh"
-            energy_join    = ""
-        sql = f"""
-        SELECT
-            {common},
-            {energy_select},
-            e.GeplantesInbetriebnahmedatum AS planned_commissioning_date,
-            e.Technologie                  AS storage_technology,
-            m.Firmenname                   AS owner_name
-        FROM storage_extended e
-        LEFT JOIN market_actors m ON m.MastrNummer = e.AnlagenbetreiberMastrNummer
-        {energy_join}
-        """
+    if storage_units_available:
+        energy_select = "su.NutzbareSpeicherkapazitaet AS usable_capacity_kwh"
+        energy_join = ("LEFT JOIN storage_units su "
+                       "ON su.VerknuepfteEinheit = e.EinheitMastrNummer")
+    else:
+        energy_select = "NULL AS usable_capacity_kwh"
+        energy_join = ""
+    return f"""
+    SELECT
+        {common},
+        {energy_select},
+        e.GeplantesInbetriebnahmedatum AS planned_commissioning_date,
+        e.Technologie                  AS storage_technology,
+        m.Firmenname                   AS owner_name
+    FROM storage_extended e
+    LEFT JOIN market_actors m ON m.MastrNummer = e.AnlagenbetreiberMastrNummer
+    {energy_join}
+    """
 
-    df = pd.read_sql(sql, con=eng)
+
+def finalise_pipeline_frame(
+    df: pd.DataFrame, tech: str, psh_backfill: bool = True,
+) -> pd.DataFrame:
+    """Backend-independent post-processing applied to `pipeline_sql` output.
+
+    Shared by the SQLite and parquet backends so both emit byte-identical
+    frames. Covers date coercion, the PV enum translation, and the PSH energy
+    backfill.
+    """
     df = _parse_date_cols(df, _PIPELINE_DATE_COLS)
 
     # PV-only post-processing: translate enum strings to Zenodo-style values
@@ -334,3 +334,33 @@ def load_for_pipeline(
         df = _backfill_psh_energy_from_zenodo(df)
 
     return df
+
+
+def load_for_pipeline(
+    tech: str, db_path: Path = DB_PATH, psh_backfill: bool = True,
+) -> pd.DataFrame:
+    """Load `tech` shaped to the Zenodo-parquet column contract consumed by
+    mastr_plot.load_from_bulk.
+
+    tech ∈ {"wind", "pv", "bess"}.
+
+    Returns a DataFrame with columns that match the bulk-parquet schema, so
+    downstream rename + decoration in load_from_bulk works unchanged. Strict
+    mode: raises if market_actors is empty (owner_name JOIN would be all NULL).
+
+    Prefer `mastr_parquet.load_for_pipeline` where the parquet store exists —
+    same frame, ~20-30x faster (the 11 GB row-store pages through all 96
+    columns to return 16).
+    """
+    if tech not in ("wind", "pv", "bess"):
+        raise ValueError(f"unknown tech {tech!r}; expected wind|pv|bess")
+
+    _ensure_market_actors(db_path)
+    eng = engine(db_path)
+
+    storage_units_available = tech != "bess" or (
+        pd.read_sql("SELECT COUNT(*) AS n FROM storage_units", con=eng).iloc[0, 0] > 0
+    )
+    sql = pipeline_sql(tech, storage_units_available=storage_units_available)
+    df = pd.read_sql(sql, con=eng)
+    return finalise_pipeline_frame(df, tech, psh_backfill=psh_backfill)

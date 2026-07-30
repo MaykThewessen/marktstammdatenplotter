@@ -115,14 +115,14 @@ def load_records(data_dir: Path | None = None, demo_if_missing: bool = True,
 
     Returns (df, is_demo). When `is_demo` is True the rows are synthetic.
 
-    If `prefer_bulk=True` (default) and a bulk snapshot is available — either
-    the open-mastr SQLite at data/mastr/open-mastr.db (preferred) or the
-    Zenodo parquet dir BNetzA_MaStR/ — it is loaded instead of the JSON-API
-    scrape (which covers only the top-200 k slice). Falls back to the JSON
-    scrape if neither bulk source is present.
+    If `prefer_bulk=True` (default) and a bulk snapshot is available — the
+    open-mastr parquet store at data/mastr/parquet/ (preferred), the SQLite DB
+    at data/mastr/open-mastr.db, or the Zenodo parquet dir BNetzA_MaStR/ — it is
+    loaded instead of the JSON-API scrape (which covers only the top-200 k
+    slice). Falls back to the JSON scrape if no bulk source is present.
 
-    `source` is forwarded to load_from_bulk: "auto" picks SQLite when
-    available, "sqlite" forces it, "zenodo" forces the legacy parquet path.
+    `source` is forwarded to load_from_bulk: "auto" prefers the parquet store,
+    then SQLite, then Zenodo; "parquet" / "sqlite" / "zenodo" force one path.
 
     If `data_dir` is None, all default dirs that hold *.json scrapes are merged
     so a single DataFrame contains wind + PV when both have been scraped.
@@ -249,10 +249,10 @@ def load_bess(data_dir: Path | None = None, demo_if_missing: bool = False,
     is not implemented yet because the per-Kreis names are pre-joined in
     the source JSON and the demo data wouldn't reflect that.
 
-    If `prefer_bulk=True` (default) a bulk snapshot is preferred — either
-    the open-mastr SQLite at data/mastr/open-mastr.db (`source="auto"`,
-    default) or BNetzA_MaStR/storage.parquet. Falls back to the JSON scrape
-    if neither bulk source is present.
+    If `prefer_bulk=True` (default) a bulk snapshot is preferred, in the order
+    data/mastr/parquet/ → data/mastr/open-mastr.db → BNetzA_MaStR/storage.parquet
+    (`source="auto"`, default). Falls back to the JSON scrape if no bulk source
+    is present.
     """
     if prefer_bulk and data_dir is None:
         try:
@@ -449,17 +449,33 @@ def normalise_kreis_series(s: pd.Series) -> pd.Series:
     return s.map(lut)
 
 
+_BULK_TABLES = {"wind_extended", "solar_extended", "storage_extended"}
+
+
 def _resolve_bulk_source(
     source: str, bulk_dir: Path | None,
 ) -> tuple[str, Path | None]:
-    """Decide between open-mastr SQLite and the Zenodo parquet directory.
+    """Pick a backing store for the bulk snapshot.
 
     Returns (resolved_source, bulk_path_or_None). resolved_source is one of
-    "sqlite" or "zenodo". For "auto", the SQLite path wins when the DB exists
-    AND has rows; otherwise we fall back to the parquet directory.
+    "parquet", "sqlite" or "zenodo". For "auto" the order is parquet (smallest
+    and ~30x faster to load), then the SQLite DB, then the Zenodo dump.
     """
-    if source not in ("zenodo", "sqlite", "auto"):
-        raise ValueError(f"unknown source {source!r}; expected zenodo|sqlite|auto")
+    if source not in ("zenodo", "sqlite", "parquet", "auto"):
+        raise ValueError(
+            f"unknown source {source!r}; expected zenodo|sqlite|parquet|auto"
+        )
+
+    if source == "parquet":
+        import mastr_parquet
+        if not _BULK_TABLES <= set(mastr_parquet.available_tables()):
+            raise FileNotFoundError(
+                f"source='parquet' requested but {mastr_parquet.PARQUET_DIR} does "
+                "not hold the expected tables. Run `pixi run db-mastr-core` to "
+                "download straight to parquet, or `pixi run db-mastr-parquet` to "
+                "convert an existing open-mastr.db."
+            )
+        return "parquet", None
 
     if source == "sqlite":
         # Force: import + return without touching the parquet path.
@@ -480,21 +496,30 @@ def _resolve_bulk_source(
             )
         return "zenodo", chosen
 
-    # auto: prefer SQLite when present + populated; otherwise fall back.
+    # auto: parquet store first — same rows as the SQLite DB, 8.7x smaller and
+    # ~30x faster to load, since a columnar scan skips the 80-odd columns the
+    # pipeline does not project.
+    import mastr_parquet
+    try:
+        if _BULK_TABLES <= set(mastr_parquet.available_tables()):
+            return "parquet", None
+    except Exception:
+        pass  # fall through to SQLite
+
     import mastr_db
     if mastr_db.DB_PATH.exists():
         try:
             # Cheap row probe — sqlite_master has no penalty.
             tables = mastr_db.list_tables()
-            if {"wind_extended", "solar_extended", "storage_extended"} <= set(tables):
+            if _BULK_TABLES <= set(tables):
                 return "sqlite", None
         except Exception:
             pass  # fall through to parquet
     chosen = Path(bulk_dir) if bulk_dir else find_bulk_dir()
     if chosen is None:
         raise FileNotFoundError(
-            "source='auto' could not locate either the open-mastr SQLite DB or "
-            "a Zenodo parquet bulk dir (BNetzA_MaStR/). Run "
+            "source='auto' could not locate a parquet store, the open-mastr "
+            "SQLite DB, or a Zenodo parquet bulk dir (BNetzA_MaStR/). Run "
             "`pixi run db-mastr-core` or place the Zenodo dump."
         )
     return "zenodo", chosen
@@ -508,9 +533,10 @@ def load_from_bulk(
     """Load an open-MaStR bulk snapshot for a single technology.
 
     `source` selects the backing store:
-      * "auto"   — open-mastr SQLite if present, else Zenodo parquet (default).
-      * "sqlite" — force open-mastr SQLite via mastr_db.load_for_pipeline.
-      * "zenodo" — force the legacy Zenodo parquet path.
+      * "auto"    — parquet store, else open-mastr SQLite, else Zenodo (default).
+      * "parquet" — force the open-mastr parquet store via mastr_parquet.
+      * "sqlite"  — force open-mastr SQLite via mastr_db.load_for_pipeline.
+      * "zenodo"  — force the legacy Zenodo parquet path.
 
     Returns (df, is_bulk). DataFrame matches the column schema used by the
     existing JSON-scrape loaders (`load_records`, `load_bess`) so downstream
@@ -531,7 +557,10 @@ def load_from_bulk(
         "bess": "Speicher",
     }[tech]
 
-    if resolved == "sqlite":
+    if resolved == "parquet":
+        import mastr_parquet
+        df = mastr_parquet.load_for_pipeline(tech)
+    elif resolved == "sqlite":
         import mastr_db
         df = mastr_db.load_for_pipeline(tech)
     else:

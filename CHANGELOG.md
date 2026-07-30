@@ -7,6 +7,49 @@ All notable changes to this project. Follows
 ## [Unreleased]
 
 ### Added
+- **Parquet store as the primary data format, replacing the SQLite snapshot.**
+  `data/mastr/parquet/` holds one zstd parquet file per table, read through
+  DuckDB. Measured on the 2026-06-16 export (34 tables, 38 014 694 rows):
+  **11.32 GB → 1.30 GB (8.7x smaller)** and the PV pipeline load drops from
+  **107 s → 3.6 s (~30x faster)**. The size win is zstd over columnar chunks;
+  the speed win is the row-store/column-store split, since projecting 16 of
+  solar_extended's 96 columns no longer pages through the other 80.
+- `mastr_parquet.py` — the store: `load()`, `load_geo()`, `load_for_pipeline()`,
+  `count()`, `list_tables()`, `connect()` (DuckDB views named after the tables),
+  plus `convert_from_sqlite()` for one-shot migration. Mirrors `mastr_db`'s API
+  so the two are interchangeable.
+- **`pixi run db-mastr-core` now writes parquet directly, skipping SQLite
+  entirely** — the 11 GB DB is never created. `scripts/mastr_download.py`
+  redirects open-mastr's SQL writer by replacing `create_database_table` (no-op)
+  and `add_table_to_sqlite_database` (writes a parquet part), leaving upstream's
+  XML parsing, katalogwerte decoding and cleansing untouched. `--sqlite` restores
+  the legacy path.
+- `pixi run db-mastr-parquet` — convert an existing `open-mastr.db` in place
+  (~1.5 min); the SQLite file is left untouched for verification.
+- `mastr_plot.load_from_bulk(source="parquet")`, and `source="auto"` now prefers
+  parquet → sqlite → zenodo.
+- `tests/test_parquet_store.py` — 19 tests covering native DATE/BOOLEAN types,
+  ORM-column materialisation, geo filtering, and row-level equivalence with the
+  SQLite backend.
+- `duckdb` dependency.
+
+### Changed
+- `mastr_db.load_for_pipeline` split into `pipeline_sql()` +
+  `finalise_pipeline_frame()` so the SQLite and parquet backends execute
+  **identical** SQL and post-processing rather than parallel implementations
+  that could drift.
+- Both population paths now restore types from open-mastr's ORM:
+  `Inbetriebnahmedatum` is a real `DATE` and booleans are `BOOLEAN`, where
+  SQLite could only store TEXT and INTEGER 0/1.
+
+### Fixed
+- Timestamps in the parquet store use microsecond precision, not nanosecond:
+  `market_actors.Taetigkeitsbeginn` reaches back to year 0100, outside pandas'
+  ns range of 1677–2262. Mixed-precision parts could not be merged at all.
+- `finalise_table` reproduces SQLite's `INSERT ... ON CONFLICT DO NOTHING`
+  dedup with a keep-first `row_number()` window, since parquet has no
+  constraints of its own (market_actors merges 55 parts down to 5 418 184 rows).
+
 - **Daily-fresh open-mastr SQLite snapshot as primary data source.**
   `pixi run db-mastr-core` populates `data/mastr/open-mastr.db` (~6 GB,
   gitignored) with wind, solar, storage, storage_units, and market_actors

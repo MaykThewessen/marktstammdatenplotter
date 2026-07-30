@@ -22,6 +22,7 @@ jupyter     = "*"
 ipykernel   = "*"
 ffmpeg      = "*"
 requests    = "*"
+duckdb = ">=1.5.5,<2"
 
 # open-mastr is PyPI-only (not on conda-forge as of v0.17.1).
 # Provides bulk MaStR XML → SQLite at ~/.open-MaStR/data/sqlite/open-mastr.db.
@@ -29,9 +30,12 @@ requests    = "*"
 open-mastr = ">=0.17"
 
 [tasks]
-# Bulk download of MaStR into SQLite at ~/.open-MaStR/data/sqlite/open-mastr.db.
+# Bulk download of MaStR into the parquet store at data/mastr/parquet/.
 # Single-tech variants avoid the multi-GB full pull.
-# Wrapper relabels open-mastr's tqdm bar so the rate shows MB/s next to the ETA.
+# Wrapper relabels open-mastr's tqdm bar so the rate shows MB/s next to the ETA,
+# and redirects open-mastr's SQL writer to parquet so the 11 GB SQLite is never
+# created (measured: 11.32 GB SQLite -> 1.30 GB parquet, same 38.0 M rows).
+# Append --sqlite to any of these for the legacy open-mastr.db path.
 db-mastr-wind    = "python scripts/mastr_download.py wind"
 db-mastr-solar   = "python scripts/mastr_download.py solar"
 db-mastr-storage = "python scripts/mastr_download.py storage"
@@ -39,6 +43,10 @@ db-mastr-market  = "python scripts/mastr_download.py market"
 db-mastr-storage-units = "python scripts/mastr_download.py storage_units"
 db-mastr-core    = "python scripts/mastr_download.py wind solar storage storage_units market"
 db-mastr-all     = "python scripts/mastr_download.py"
+
+# One-shot migration of an existing open-mastr.db to the parquet store.
+# Leaves the SQLite file alone; delete it once you have verified the store.
+db-mastr-parquet = "python mastr_parquet.py"
 
 # One-shot scrapes — uses the README's curl recipes.
 scrape-non-pv = """
