@@ -70,7 +70,7 @@ picks the store; `source="auto"` (default) prefers, in order:
 1. **`parquet`** — `data/mastr/parquet/`, one zstd file per table, read through
    DuckDB (`mastr_parquet.py`). The default and fastest path.
 2. **`sqlite`** — `data/mastr/open-mastr.db`, the legacy open-mastr snapshot
-   (`mastr_db.py`).
+   (`mastr_db.py`). Not present by default; only written with `--sqlite`.
 3. **`zenodo`** — frozen Zenodo parquet dump under `BNetzA_MaStR/`, which still
    carries a few fields open-mastr drops (see below).
 
@@ -134,6 +134,14 @@ When touching that writer, three things are load-bearing:
 - **Timestamps are microseconds, not nanoseconds.** `market_actors.Taetigkeits-
   beginn` reaches back to year 0100, which overflows pandas' ns range of
   1677–2262. Parts with mismatched units cannot be merged at all.
+
+**Where the store lives.** `mastr_parquet.PARQUET_DIR` prefers the in-checkout
+`data/mastr/parquet/` and falls back to `~/.open-MaStR/data/parquet`, which is
+symlinked to the main checkout's copy. That fallback is what makes git worktrees
+work: a fresh worktree's own `data/mastr/` is empty, and without it `source="auto"`
+walks past parquet and SQLite and silently serves **synthetic demo data** — which
+looks like a successful render, not an error. Check
+`mastr_plot.load_records()[1]` (`is_demo`) if numbers look wrong in a worktree.
 
 Both population paths restore types from open-mastr's ORM (`orm_dtypes`), so
 `Inbetriebnahmedatum` is a real `DATE` and booleans are `BOOLEAN` rather than
