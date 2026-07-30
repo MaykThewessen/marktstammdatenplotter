@@ -34,6 +34,16 @@ All notable changes to this project. Follows
 - `duckdb` dependency.
 
 ### Changed
+- **open-mastr 0.17.1 → 0.17.4**, and the local `_robust_replace_katalogeintraege`
+  monkeypatch is **removed** — open-mastr 0.17.2 fixed the same bug upstream
+  (comma-separated catalog codes such as `WeitereBrennstoffe = "2442, 2442"`
+  aborting the whole combustion table). Verified against the cached export with
+  no patch: `combustion_extended` parses to 93 614 rows and `WeitereBrennstoffe`
+  decodes identically to the previously patched output ("Erdgas, Erdölgas" 1454
+  rows, etc.). Keeping the override would only shadow upstream's implementation.
+- `scripts/mastr_download.py` accepts `--date=YYYYMMDD` and `--keep-old`, so a
+  cached export can be reprocessed instead of re-pulling ~3 GB. `keep_old_downloads`
+  defaults to False upstream, which deletes XML files from other dates.
 - `mastr_db.load_for_pipeline` split into `pipeline_sql()` +
   `finalise_pipeline_frame()` so the SQLite and parquet backends execute
   **identical** SQL and post-processing rather than parallel implementations

@@ -24,9 +24,16 @@ rate is reported in MB/s right next to tqdm's ETA (``[elapsed<remaining, rate]``
 
 Both bars use a 1024-based scale so "MB" means MiB consistently across paths.
 
+Writes the parquet store at data/mastr/parquet/ by default, never materialising
+the 11 GB SQLite (see the parquet-writer section below). Pass --sqlite for
+open-mastr's own SQL path.
+
 Usage:
     python scripts/mastr_download.py wind solar storage   # selected tables
     python scripts/mastr_download.py                       # full export
+    python scripts/mastr_download.py wind --sqlite         # legacy SQLite path
+    python scripts/mastr_download.py wind --date=20260616 --keep-old
+                                       # reprocess a cached export in place
 """
 
 from __future__ import annotations
@@ -103,48 +110,16 @@ _bulk.tqdm = _tqdm_mb
 _bulk.partial_download_with_unzip_http = _partial_download_with_progress
 
 
-# --- combustion-table parse fix -------------------------------------------
-# open-mastr aborts the entire combustion table (gas/coal/oil, EinheitenVerbrennung)
-# when a catalog column holds multiple comma-separated codes: WeitereBrennstoffe
-# values like "2442, 2442" crash replace_mastr_katalogeintraege's .astype("float")
-# and leave combustion_extended at 0 rows (logged as ERROR only, download exits 0).
-# Re-driving the catalog casts through pd.to_numeric(errors="coerce") drops the
-# unparseable multi-code value (a column we don't use) and lets the table parse.
+# The combustion-table parse fix that used to live here is gone: open-mastr
+# 0.17.2 fixed it upstream. It aborted the whole combustion table (gas/coal/oil,
+# EinheitenVerbrennung) when a catalog column held comma-separated codes —
+# WeitereBrennstoffe values like "2442, 2442" crashed
+# replace_mastr_katalogeintraege's astype and left combustion_extended at 0 rows,
+# logged as ERROR only, with the download still exiting 0. Upstream now splits on
+# commas and uses pd.api.types.is_string_dtype, so a local override would only
+# shadow their implementation.
 import pandas as pd  # noqa: E402
-import open_mastr.xml_download.utils_cleansing_bulk as _ucb  # noqa: E402
-
-
-def _robust_replace_katalogeintraege(zipped_xml_file_path, df):
-    katalogwerte = _ucb.create_katalogwerte_from_bulk_download(zipped_xml_file_path)
-    for column_name in df.columns:
-        if column_name in _ucb.columns_replace_list:
-            col = df[column_name]
-            if col.dtype == "O":
-                df[column_name] = (
-                    col.str.split(",", expand=True)
-                    .apply(
-                        lambda x: pd.to_numeric(x.str.strip(), errors="coerce").astype(
-                            "Int64"
-                        )
-                    )
-                    .map(katalogwerte.get)
-                    .agg(lambda d: ",".join(i for i in d if isinstance(i, str)), axis=1)
-                    .replace("", None)
-                )
-            else:
-                df[column_name] = (
-                    pd.to_numeric(col, errors="coerce").astype("Int64").map(katalogwerte)
-                )
-    return df
-
-
-_ucb.replace_mastr_katalogeintraege = _robust_replace_katalogeintraege
-# the writer module imports the symbol by value, so patch its reference too
 import open_mastr.xml_download.utils_write_to_database as _uw  # noqa: E402
-
-if hasattr(_uw, "replace_mastr_katalogeintraege"):
-    _uw.replace_mastr_katalogeintraege = _robust_replace_katalogeintraege
-# --------------------------------------------------------------------------
 
 # --- parquet writer -------------------------------------------------------
 # open-mastr only knows how to write SQL. Its per-XML-file worker does
@@ -263,16 +238,26 @@ from open_mastr import Mastr  # noqa: E402  (import after the patches are applie
 
 
 def main() -> None:
-    argv = [a for a in sys.argv[1:] if a != "--sqlite"]
-    use_parquet = "--sqlite" not in sys.argv[1:]
-    data = argv or None  # None -> open-mastr downloads the full export
+    args = sys.argv[1:]
+    use_parquet = "--sqlite" not in args
+    # Pin the export date to reprocess a zip already on disk instead of pulling
+    # today's. Without it open-mastr targets today and re-downloads ~3 GB.
+    date = next((a.split("=", 1)[1] for a in args if a.startswith("--date=")), None)
+    # open-mastr deletes XML files that are not from the requested date, so a
+    # cached export is destroyed unless this is set.
+    keep_old = "--keep-old" in args
+    data = [a for a in args if not a.startswith("--")] or None
+
+    opts = {"data": data, "keep_old_downloads": keep_old}
+    if date:
+        opts["date"] = date
 
     if not use_parquet:
-        Mastr().download(data=data)
+        Mastr().download(**opts)
         return
 
     _install_parquet_writer()
-    Mastr().download(data=data)
+    Mastr().download(**opts)
     written = sorted(_part_counter)
     if not written:
         raise SystemExit(

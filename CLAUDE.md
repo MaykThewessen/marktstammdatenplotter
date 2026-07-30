@@ -118,7 +118,8 @@ contiguously, so projecting 16 still pages through the other 80).
 knows how to write SQL. It replaces `create_database_table` (no-op) and
 `add_table_to_sqlite_database` (writes a parquet part), leaving upstream's XML
 parsing, katalogwerte decoding and cleansing untouched. Pass `--sqlite` for the
-legacy path.
+legacy path, `--date=YYYYMMDD --keep-old` to reprocess an export already on disk
+(without `--keep-old`, open-mastr deletes the ~3 GB zip for any other date).
 
 When touching that writer, three things are load-bearing:
 
@@ -126,8 +127,7 @@ When touching that writer, three things are load-bearing:
   unless `NUMBER_OF_PROCESSES` / `USE_RECOMMENDED_NUMBER_OF_PROCESSES` is set;
   with a process pool the children re-import open-mastr and resolve the
   *original* function, silently writing SQLite. `_install_parquet_writer` hard-
-  fails on those env vars. The same constraint applies to the pre-existing
-  katalogwerte patch.
+  fails on those env vars.
 - **Parquet has no constraints.** SQLite deduplicated via
   `INSERT ... ON CONFLICT DO NOTHING`; `finalise_table` reproduces it with
   `row_number() OVER (PARTITION BY <pk> ORDER BY _part_seq) = 1` (keep-first).
