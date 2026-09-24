@@ -27,7 +27,9 @@ duckdb = ">=1.5.5,<2"
 # open-mastr is PyPI-only (not on conda-forge as of v0.17.1).
 # Provides bulk MaStR XML → SQLite at ~/.open-MaStR/data/sqlite/open-mastr.db.
 [pypi-dependencies]
-open-mastr = ">=0.17"
+# <1: v1.0.0 renames tables to the German BNetzA names and removes
+# create_database_table, which scripts/mastr_download.py patches.
+open-mastr = ">=0.17,<1"
 
 [tasks]
 # Bulk download of MaStR into the parquet store at data/mastr/parquet/.
