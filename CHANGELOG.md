@@ -34,6 +34,33 @@ All notable changes to this project. Follows
 - `duckdb` dependency.
 
 ### Changed
+- **open-mastr 0.17.4 → 1.0.0.** Tables now carry the original BNetzA names
+  (`EinheitenWind`, `EinheitenSolar`, `EinheitenStromSpeicher`,
+  `AnlagenStromSpeicher`, `Marktakteure`) and the schema comes from BNetzA's XSD
+  instead of open-mastr's hand-written ORM. Columns keep their German names; the
+  one rename the pipeline sees is the storage join column
+  `VerknuepfteEinheit` → `VerknuepfteEinheitenMastrNummern`. Verified by
+  rebuilding the store from the same Gesamtdatenexport_20260616 and comparing
+  against the 0.17.4 store: the wind, PV and BESS pipeline frames are identical
+  (`assert_frame_equal`, dtypes included).
+- `scripts/mastr_download.py` patches the 1.x writer (`delete_all_existing_rows`,
+  `check_for_column_mismatch_and_try_to_solve_it`, `add_table_to_sqlite_database`)
+  and passes the XSD data model plus a throwaway engine, so no SQL DDL runs.
+- **The download now fails when open-mastr logs a per-file error.** Upstream
+  logs the exception and still reports "Bulk download was successful". The cached
+  20260616 zip has 8 corrupt `AnlagenEegSolar` members; the 0.17.4 store was
+  built from it and its `solar_eeg` silently holds only the 55 healthy files
+  (5410540 rows).
+- Tables that BNetzA gives no natural key (`EinheitenAenderungNetzbetreiberzuordnungen`)
+  are no longer deduplicated: open-mastr 1.0 keys them with a surrogate id and
+  keeps every record (216758 rows, where 0.17 kept the first change per unit,
+  212448). The surrogate id itself is not written to the store.
+- `pipeline_sql` orders rows by `mastr_id`. Row order used to follow the store's
+  physical layout, and chart rankings break ties by it, so a rebuilt store could
+  swap equal-capacity plants (it did in `largest-plants.json`).
+- The `storage_units` data option is gone (deprecated upstream; `storage` now
+  includes `AnlagenStromSpeicher`), and so is `pixi run db-mastr-storage-units`.
+- `scripts/build_full_bess.py` reads the parquet store instead of the SQLite DB.
 - **open-mastr 0.17.1 → 0.17.4**, and the local `_robust_replace_katalogeintraege`
   monkeypatch is **removed** — open-mastr 0.17.2 fixed the same bug upstream
   (comma-separated catalog codes such as `WeitereBrennstoffe = "2442, 2442"`

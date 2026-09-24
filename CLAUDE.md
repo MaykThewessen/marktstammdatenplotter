@@ -36,7 +36,7 @@ pixi run python -m pytest tests/test_parquet_store.py -q
 Data refresh (see **Data sources** for which to use):
 
 ```bash
-pixi run db-mastr-core          # wind+solar+storage+storage_units+market -> parquet
+pixi run db-mastr-core          # wind+solar+storage+market -> parquet
 pixi run db-mastr-all           # every table
 pixi run db-mastr-wind          # single tech; also -solar -storage -market
 pixi run db-mastr-parquet       # convert an existing open-mastr.db to parquet
@@ -114,14 +114,17 @@ The size drop is zstd over columnar chunks; the speedup is the
 row-store/column-store split (SQLite stores all 96 columns of a solar row
 contiguously, so projecting 16 still pages through the other 80).
 
-`scripts/mastr_download.py` gets this by monkeypatching open-mastr, which only
-knows how to write SQL. It replaces `create_database_table` (no-op) and
-`add_table_to_sqlite_database` (writes a parquet part), leaving upstream's XML
-parsing, katalogwerte decoding and cleansing untouched. Pass `--sqlite` for the
-legacy path, `--date=YYYYMMDD --keep-old` to reprocess an export already on disk
-(without `--keep-old`, open-mastr deletes the ~3 GB zip for any other date).
+`scripts/mastr_download.py` gets this by monkeypatching open-mastr 1.x, which
+only knows how to write SQL. It replaces `delete_all_existing_rows` (clears stale
+parts), `check_for_column_mismatch_and_try_to_solve_it` (pass-through, so XML
+columns beyond the XSD survive) and `add_table_to_sqlite_database` (writes a
+parquet part), leaving upstream's XML parsing, katalogwerte decoding and
+cleansing untouched. It passes the XSD-generated data model and a throwaway
+engine, so no SQL DDL runs and no database file is opened. Pass `--sqlite` for
+the legacy path, `--date=YYYYMMDD --keep-old` to reprocess an export already on
+disk (without `--keep-old`, open-mastr deletes the ~3 GB zip for any other date).
 
-When touching that writer, three things are load-bearing:
+When touching that writer, four things are load-bearing:
 
 - **It only works single-process.** `get_number_of_processes()` returns -1
   unless `NUMBER_OF_PROCESSES` / `USE_RECOMMENDED_NUMBER_OF_PROCESSES` is set;
@@ -131,9 +134,12 @@ When touching that writer, three things are load-bearing:
 - **Parquet has no constraints.** SQLite deduplicated via
   `INSERT ... ON CONFLICT DO NOTHING`; `finalise_table` reproduces it with
   `row_number() OVER (PARTITION BY <pk> ORDER BY _part_seq) = 1` (keep-first).
-- **Timestamps are microseconds, not nanoseconds.** `market_actors.Taetigkeits-
+- **Timestamps are microseconds, not nanoseconds.** `Marktakteure.Taetigkeits-
   beginn` reaches back to year 0100, which overflows pandas' ns range of
   1677–2262. Parts with mismatched units cannot be merged at all.
+- **open-mastr swallows per-file errors.** `process_xml_file` logs any exception
+  as ERROR and still ends in "Bulk download was successful". `_ErrorRecorder`
+  collects those records and the run exits non-zero before touching the store.
 
 **Where the store lives.** `mastr_parquet.PARQUET_DIR` prefers the in-checkout
 `data/mastr/parquet/` and falls back to `~/.open-MaStR/data/parquet`, which is
@@ -143,11 +149,17 @@ walks past parquet and SQLite and silently serves **synthetic demo data** — wh
 looks like a successful render, not an error. Check
 `mastr_plot.load_records()[1]` (`is_demo`) if numbers look wrong in a worktree.
 
-Both population paths restore types from open-mastr's ORM (`orm_dtypes`), so
+Tables carry the BNetzA names since open-mastr 1.0 (`EinheitenWind`,
+`EinheitenSolar`, `EinheitenStromSpeicher`, `AnlagenStromSpeicher`,
+`Marktakteure`); columns keep their German XML names. `mastr_db.EXTENDED_TABLES`,
+`MARKET_ACTORS_TABLE` and `STORAGE_UNITS_TABLE` are the one place to name them.
+`english=True` is not an option here: it translates the columns too.
+
+Both population paths restore types with `mastr_parquet.column_types`, from the
+XSD-generated `Table` (download) or the reflected SQLite table (conversion), so
 `Inbetriebnahmedatum` is a real `DATE` and booleans are `BOOLEAN` rather than
-SQLite's TEXT and INTEGER 0/1. Columns the XML never populates are still
-materialised as all-NULL, because SQLite got them from `CREATE TABLE` and
-dropping them would break `SELECT Meldedatum FROM wind_extended`.
+SQLite's TEXT and INTEGER 0/1. Columns the XSD declares but the XML never
+populates are still materialised as all-NULL, as SQLite's `CREATE TABLE` did.
 
 ### Known open-mastr gaps (why the Zenodo path still exists)
 
@@ -156,10 +168,11 @@ dropping them would break `SELECT Meldedatum FROM wind_extended`.
   parquet when present.
 - **PV location granularity**: open-mastr's `ArtDerSolaranlage` has only 4 values
   and collapses "Großparkplatz" (~93 rows) and "Gewässer" (~33 rows) into
-  "Bauliche Anlagen (Sonstige)". The raw `Lage` column exists but is NULL for
-  all 6.1 M rows. Use `source="zenodo"` if you need that distinction.
-- **Storage energy lives in `storage_units`**, not `storage_extended` (where the
-  column is always NULL), joined one-to-one via `VerknuepfteEinheit`.
+  "Bauliche Anlagen (Sonstige)". The BNetzA XSD has no `Lage` column for
+  `EinheitenSolar`. Use `source="zenodo"` if you need that distinction.
+- **Storage energy lives in `AnlagenStromSpeicher`**, not `EinheitenStromSpeicher`,
+  joined via `VerknuepfteEinheitenMastrNummern`. About 30 installations list
+  several units comma-separated, which the equality join misses.
 - **Anonymisation**: units < 30 kW have NULL coordinates under MaStR publication
   rules. `load_geo(..., drop_anonymised=True)` skips them; aggregate to Kreis via
   the name fallback in `mastr_plot.py` instead.

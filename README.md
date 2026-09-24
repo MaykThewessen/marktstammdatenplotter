@@ -52,9 +52,9 @@ in kW, geographic coordinates, and a pile of enum-encoded metadata.
 This repo:
 
 1. **loads** the registry — primary path is the daily-fresh
-   [open-mastr](https://open-mastr.readthedocs.io) bulk SQLite snapshot
-   (`pixi run db-mastr-core` → `data/mastr/open-mastr.db`, ~6 GB,
-   gitignored); fallback paths are the Zenodo parquet dump under
+   [open-mastr](https://open-mastr.readthedocs.io) bulk export, written
+   straight to a zstd parquet store (`pixi run db-mastr-core` →
+   `data/mastr/parquet/`, ~1.3 GB, gitignored); fallback paths are the Zenodo parquet dump under
    `BNetzA_MaStR/` and the legacy JSON-API scrape (`parser.py`),
 2. **joins** units to German county (*Kreis*) polygons from BKG VG2500,
 3. **renders** one choropleth frame per month from the year 2000 to today, and
