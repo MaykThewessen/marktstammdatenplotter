@@ -449,7 +449,10 @@ def normalise_kreis_series(s: pd.Series) -> pd.Series:
     return s.map(lut)
 
 
-_BULK_TABLES = {"wind_extended", "solar_extended", "storage_extended"}
+def _bulk_tables() -> set[str]:
+    """Tables a bulk store must hold for wind, PV and storage to load."""
+    import mastr_db
+    return {mastr_db.EXTENDED_TABLES[t] for t in ("wind", "solar", "storage")}
 
 
 def _resolve_bulk_source(
@@ -468,7 +471,7 @@ def _resolve_bulk_source(
 
     if source == "parquet":
         import mastr_parquet
-        if not _BULK_TABLES <= set(mastr_parquet.available_tables()):
+        if not _bulk_tables() <= set(mastr_parquet.available_tables()):
             raise FileNotFoundError(
                 f"source='parquet' requested but {mastr_parquet.PARQUET_DIR} does "
                 "not hold the expected tables. Run `pixi run db-mastr-core` to "
@@ -501,7 +504,7 @@ def _resolve_bulk_source(
     # pipeline does not project.
     import mastr_parquet
     try:
-        if _BULK_TABLES <= set(mastr_parquet.available_tables()):
+        if _bulk_tables() <= set(mastr_parquet.available_tables()):
             return "parquet", None
     except Exception:
         pass  # fall through to SQLite
@@ -511,7 +514,7 @@ def _resolve_bulk_source(
         try:
             # Cheap row probe — sqlite_master has no penalty.
             tables = mastr_db.list_tables()
-            if _BULK_TABLES <= set(tables):
+            if _bulk_tables() <= set(tables):
                 return "sqlite", None
         except Exception:
             pass  # fall through to parquet

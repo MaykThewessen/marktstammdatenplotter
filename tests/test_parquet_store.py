@@ -21,7 +21,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import mastr_db  # noqa: E402
 import mastr_parquet  # noqa: E402
 
-_REQUIRED = {"wind_extended", "solar_extended", "storage_extended", "market_actors"}
+_WIND = mastr_db.EXTENDED_TABLES["wind"]
+_REQUIRED = {
+    *(mastr_db.EXTENDED_TABLES[t] for t in ("wind", "solar", "storage")),
+    mastr_db.MARKET_ACTORS_TABLE,
+}
 _STORE_TABLES = set(mastr_parquet.available_tables())
 
 pytestmark = pytest.mark.skipif(
@@ -48,27 +52,22 @@ def con():
 
 class TestNativeTypes:
     """SQLite has no DATE or BOOLEAN; parquet does, and both population paths
-    restore them from the ORM so the schema cannot depend on how it was built."""
+    restore them from the table schema so the store cannot depend on how it was
+    built. Declared-but-empty columns are covered by test_mastr_download."""
 
     def test_date_column_is_date(self, con) -> None:
         t = con.execute(
             "SELECT column_type FROM (DESCRIBE SELECT Inbetriebnahmedatum "
-            "FROM wind_extended)"
+            f'FROM "{_WIND}")'
         ).fetchone()[0]
         assert t == "DATE", f"expected DATE, got {t}"
 
     def test_boolean_column_is_boolean(self, con) -> None:
         t = con.execute(
             "SELECT column_type FROM (DESCRIBE SELECT Rotorblattenteisungssystem "
-            "FROM wind_extended)"
+            f'FROM "{_WIND}")'
         ).fetchone()[0]
         assert t == "BOOLEAN", f"expected BOOLEAN, got {t}"
-
-    def test_orm_columns_are_materialised(self, con) -> None:
-        """Columns the XML never populates still exist, as SQLite's CREATE TABLE
-        gave them for free. Dropping them would break `SELECT Meldedatum ...`."""
-        cols = {r[0] for r in con.execute("DESCRIBE SELECT * FROM wind_extended").fetchall()}
-        assert {"Meldedatum", "Lage"} <= cols
 
 
 class TestGeo:
@@ -95,7 +94,7 @@ class TestPipelineContract:
                 "owner_name"} <= set(df.columns)
 
     def test_owner_name_is_populated(self) -> None:
-        """Guards the market_actors JOIN: a wrong key silently yields all-NULL."""
+        """Guards the Marktakteure JOIN: a wrong key silently yields all-NULL."""
         df = mastr_parquet.load_for_pipeline("wind")
         assert df["owner_name"].notna().any()
 

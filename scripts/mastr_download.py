@@ -2,9 +2,9 @@
 
 open-mastr has two bulk-download code paths, each with its own progress bar:
 
-1. Subset pulls (e.g. ``db-mastr-core`` -> wind/solar/storage/...) go through
-   ``partial_download_with_unzip_http``, which extracts files one by one from
-   the remote zip via HTTP range requests and drives a tqdm bar with
+1. Subset pulls (e.g. ``db-mastr-core`` -> wind/solar/storage/market) go
+   through ``partial_download_with_unzip_http``, which extracts files one by one
+   from the remote zip via HTTP range requests and drives a tqdm bar with
    ``unit=" file"``. File sizes vary by orders of magnitude, so a per-file bar
    gives both a meaningless rate and a wildly swinging ETA.
 
@@ -38,9 +38,11 @@ Usage:
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 from tqdm import tqdm as _tqdm
@@ -55,25 +57,16 @@ def _tqdm_mb(*args, **kwargs):
     return _tqdm(*args, **kwargs)
 
 
-def _partial_download_with_progress(save_path: str, url: str, bulk_data_list: list):
+def _partial_download_with_progress(
+    save_path: str, url: str, names_to_download: set[str]
+) -> None:
     """Byte-driven replacement for open-mastr's ``partial_download_with_unzip_http``.
 
     Identical extraction behaviour; the per-file bar is swapped for a bytes bar
     so the rate shows MB/s and the ETA tracks remaining bytes, not file count.
+    Since open-mastr 1.0 the caller works out which tables are still missing
+    and always includes Katalogwerte, so this only has to extract.
     """
-    is_katalogwerte_existing = False
-    if Path(save_path).exists():
-        bulk_data_list, is_katalogwerte_existing = _bulk.check_download_completeness(
-            save_path, bulk_data_list
-        )
-        if bulk_data_list:
-            _bulk.log.info(
-                f"MaStR file already present but missing the following data: {bulk_data_list}"
-            )
-        else:
-            _bulk.log.info(f"MaStR file already present: {save_path}")
-            return None
-
     remote_zip_file = _bulk.unzip_http.RemoteZipFile(url)
     remote_zip_names = [
         name.lower().split("_")[0].split(".")[0]
@@ -82,10 +75,9 @@ def _partial_download_with_progress(save_path: str, url: str, bulk_data_list: li
 
     download_files_list = [
         remote_zip_file.namelist()[remote_index]
-        for bulk_data_name in bulk_data_list
-        for bulk_file_name in _bulk.BULK_INCLUDE_TABLES_MAP[bulk_data_name]
+        for name in names_to_download
         for remote_index, remote_zip_name in enumerate(remote_zip_names)
-        if remote_zip_name == bulk_file_name
+        if remote_zip_name == name
     ]
 
     # Compressed sizes = bytes actually pulled over HTTP, read from the zip's
@@ -101,9 +93,6 @@ def _partial_download_with_progress(save_path: str, url: str, bulk_data_list: li
         for name, size in zip(download_files_list, sizes):
             remote_zip_file.extractzip(name, path=Path(save_path))
             bar.update(size)
-
-    if not is_katalogwerte_existing:
-        remote_zip_file.extractzip("Katalogwerte.xml", path=Path(save_path))
 
 
 _bulk.tqdm = _tqdm_mb
@@ -123,16 +112,39 @@ import open_mastr.xml_download.utils_write_to_database as _uw  # noqa: E402
 
 # --- parquet writer -------------------------------------------------------
 # open-mastr only knows how to write SQL. Its per-XML-file worker does
-#   read_xml_file -> process_table_before_insertion -> add_table_to_sqlite_database
-# so replacing the last step (and neutering CREATE TABLE) lands the parsed,
-# cleansed DataFrame in parquet and never materialises the 11 GB SQLite.
+#   read_xml_file -> process_table_before_insertion
+#     -> check_for_column_mismatch_and_try_to_solve_it -> add_table_to_sqlite_database
+# after write_mastr_xml_to_database has cleared each target table once with
+# delete_all_existing_rows. Replacing the clear, the column check (which would
+# ALTER the SQL table) and the insert lands the parsed, cleansed DataFrame in
+# parquet and never materialises the 11 GB SQLite.
 #
 # Patching the writer rather than reimplementing the loop keeps open-mastr's
 # XML parsing, katalogwerte decoding and bulk cleansing exactly as upstream.
+import sqlalchemy as sa  # noqa: E402
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import mastr_parquet  # noqa: E402
 
 _part_counter: dict[str, int] = {}
+# The XSD-generated Table of every table this run writes, for finalise_table.
+_tables: dict[str, sa.Table] = {}
+
+
+class _ErrorRecorder(logging.Handler):
+    """Collect open-mastr's ERROR records.
+
+    process_xml_file catches every exception, logs it as ERROR and carries on,
+    so a file that fails to parse, cleanse or write would otherwise end in
+    "Bulk download was successful" with its rows silently missing.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(level=logging.ERROR)
+        self.messages: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.messages.append(record.getMessage())
 
 
 def _to_boolean(s: pd.Series) -> pd.Series:
@@ -152,20 +164,24 @@ def _to_boolean(s: pd.Series) -> pd.Series:
     return pd.to_numeric(s, errors="coerce").astype("boolean")
 
 
-def _coerce_to_orm_dtypes(df: pd.DataFrame, sql_table_name: str) -> pd.DataFrame:
-    """Apply the ORM's declared types so every part shares one schema.
+def _coerce_to_table_dtypes(df: pd.DataFrame, table: sa.Table) -> pd.DataFrame:
+    """Apply the table's declared types so every part shares one schema.
 
     Without this, pyarrow infers per part and a column that is all-NULL in one
     XML file but populated in the next produces incompatible parts.
 
-    Also materialises ORM columns the XML does not supply, as all-NULL. SQLite
-    got them for free from CREATE TABLE (wind_extended: 24 of 101 columns are
-    100 % NULL for the 2026-06 export), and dropping them here would make
-    `SELECT Meldedatum FROM wind_extended` fail against a directly-written store
-    while succeeding against a converted one.
+    Also materialises declared columns the XML does not supply, as all-NULL.
+    SQLite got them for free from CREATE TABLE, and dropping them here would
+    make a SELECT of a valid column fail against a directly-written store while
+    succeeding against a converted one. open-mastr's surrogate id is the
+    exception: it is not MaStR data, and only SQLite can fill it.
     """
-    orm = mastr_parquet.orm_dtypes(sql_table_name)
-    for col, (_, pdt) in orm.items():
+    surrogate = {c.name for c in table.columns if mastr_parquet.is_surrogate_key(c)}
+    dtypes = {
+        col: types for col, types in mastr_parquet.column_types(table).items()
+        if col not in surrogate
+    }
+    for col, (_, pdt) in dtypes.items():
         if col not in df.columns:
             df[col] = pd.Series(index=df.index, dtype=pdt)
             continue
@@ -185,26 +201,35 @@ def _coerce_to_orm_dtypes(df: pd.DataFrame, sql_table_name: str) -> pd.DataFrame
             # Never lose rows over a type: keep the values as text and let the
             # finalise pass carry them through.
             df[col] = s.astype("string")
-    # ORM order first, then any columns the XML carries beyond the ORM (which is
-    # what add_missing_columns_to_table appended to the SQLite table).
-    extras = [c for c in df.columns if c not in orm]
-    return df[list(orm) + extras]
+    # Declared order first, then any columns the XML carries beyond the XSD
+    # (which open-mastr would have added to the SQL table with ALTER TABLE).
+    extras = [c for c in df.columns if c not in dtypes]
+    return df[list(dtypes) + extras]
 
 
-def _create_database_table_noop(engine, xml_table_name: str) -> None:
-    """Replaces create_database_table. Parquet needs no DDL; the matching reset
-    is dropping any stale parts so a re-run does not append to the last one."""
-    sql_table_name = _uw.tablename_mapping[xml_table_name]["__class__"].__table__.name
-    shutil.rmtree(mastr_parquet.parts_dir(sql_table_name), ignore_errors=True)
-    _part_counter[sql_table_name] = 0
+def _reset_table_parts(db_table: sa.Table, engine: sa.Engine) -> None:
+    """Replaces delete_all_existing_rows: drop any stale parts of the table so
+    a re-run does not append to the last one."""
+    shutil.rmtree(mastr_parquet.parts_dir(db_table.name), ignore_errors=True)
+    _part_counter[db_table.name] = 0
+    _tables[db_table.name] = db_table
 
 
-def _add_table_to_parquet(df, xml_table_name, sql_table_name, engine) -> None:
+def _keep_all_columns(
+    df: pd.DataFrame, db_table: sa.Table, engine: sa.Engine, alter_database_tables: bool,
+) -> pd.DataFrame:
+    """Replaces check_for_column_mismatch_and_try_to_solve_it, which ALTERs the
+    SQL table for XML columns the XSD lacks. Parquet parts keep those columns
+    and finalise_table merges them with union_by_name."""
+    return df
+
+
+def _add_table_to_parquet(df: pd.DataFrame, db_table: sa.Table, engine: sa.Engine) -> None:
     """Replaces add_table_to_sqlite_database: write a part instead of INSERTing."""
-    df = _coerce_to_orm_dtypes(df, sql_table_name)
-    seq = _part_counter.get(sql_table_name, 0)
-    _part_counter[sql_table_name] = seq + 1
-    mastr_parquet.write_part(df, sql_table_name, seq)
+    df = _coerce_to_table_dtypes(df, db_table)
+    seq = _part_counter.get(db_table.name, 0)
+    _part_counter[db_table.name] = seq + 1
+    mastr_parquet.write_part(df, db_table.name, seq)
 
 
 def _install_parquet_writer() -> None:
@@ -222,16 +247,17 @@ def _install_parquet_writer() -> None:
                 "instead). Unset it, or pass --sqlite to use the legacy path."
             )
     mastr_parquet.set_store_dir(mastr_parquet.REPO_DIR)
-    _uw.create_database_table = _create_database_table_noop
+    _uw.delete_all_existing_rows = _reset_table_parts
+    _uw.check_for_column_mismatch_and_try_to_solve_it = _keep_all_columns
     _uw.add_table_to_sqlite_database = _add_table_to_parquet
 
 
-def _finalise(tables: list[str]) -> None:
+def _finalise(tables: list[sa.Table]) -> None:
     """Merge parts per table and report what landed."""
-    for table in sorted(tables):
+    for table in sorted(tables, key=lambda t: t.name):
         n = mastr_parquet.finalise_table(table)
-        size = mastr_parquet.table_path(table).stat().st_size / 1e6
-        print(f"  {table:<28} {n:>10} rows  {size:>8.1f} MB")
+        size = mastr_parquet.table_path(table.name).stat().st_size / 1e6
+        print(f"  {table.name:<44} {n:>10} rows  {size:>8.1f} MB")
 
 
 from open_mastr import Mastr  # noqa: E402  (import after the patches are applied)
@@ -257,11 +283,29 @@ def main() -> None:
         return
 
     _install_parquet_writer()
-    Mastr().download(**opts)
-    written = sorted(_part_counter)
+    errors = _ErrorRecorder()
+    logging.getLogger("open-MaStR").addHandler(errors)
+    # open-mastr needs an engine, but the patched writer never connects to it.
+    # Its default path is a symlink into this repo, where a connection would
+    # create an empty open-mastr.db, so point it at a throwaway file instead.
+    # (An in-memory URL does not work: create_efficient_engine passes pool
+    # options that SQLite's in-memory pool rejects.) Passing the data model
+    # skips open-mastr's DROP/CREATE TABLE.
+    with tempfile.TemporaryDirectory() as tmp:
+        db = Mastr(engine=sa.create_engine(f"sqlite:///{tmp}/unused.db"))
+        model = db.generate_data_model(data=data, date=date)
+        db.download(
+            **opts, mastr_table_to_db_table=model, add_views_for_old_table_names=False,
+        )
+    if errors.messages:
+        raise SystemExit(
+            f"{len(errors.messages)} error(s) logged by open-mastr, store left "
+            "unchanged:\n  " + "\n  ".join(errors.messages)
+        )
+    written = [_tables[name] for name, n in _part_counter.items() if n > 0]
     if not written:
         raise SystemExit(
-            "No parquet parts were written — the download produced no tables. "
+            "No parquet parts were written. The download produced no tables. "
             "Check the log above for parse errors."
         )
     print(f"\nMerging {len(written)} tables into {mastr_parquet.PARQUET_DIR}:")

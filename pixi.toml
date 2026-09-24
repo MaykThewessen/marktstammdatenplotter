@@ -24,12 +24,11 @@ ffmpeg      = "*"
 requests    = "*"
 duckdb = ">=1.5.5,<2"
 
-# open-mastr is PyPI-only (not on conda-forge as of v0.17.1).
-# Provides bulk MaStR XML → SQLite at ~/.open-MaStR/data/sqlite/open-mastr.db.
+# open-mastr is PyPI-only (not on conda-forge as of v1.0.0).
+# scripts/mastr_download.py patches its 1.x writer functions, so a major bump
+# needs a port, not just a lockfile update.
 [pypi-dependencies]
-# <1: v1.0.0 renames tables to the German BNetzA names and removes
-# create_database_table, which scripts/mastr_download.py patches.
-open-mastr = ">=0.17,<1"
+open-mastr = ">=1,<2"
 
 [tasks]
 # Bulk download of MaStR into the parquet store at data/mastr/parquet/.
@@ -42,8 +41,8 @@ db-mastr-wind    = "python scripts/mastr_download.py wind"
 db-mastr-solar   = "python scripts/mastr_download.py solar"
 db-mastr-storage = "python scripts/mastr_download.py storage"
 db-mastr-market  = "python scripts/mastr_download.py market"
-db-mastr-storage-units = "python scripts/mastr_download.py storage_units"
-db-mastr-core    = "python scripts/mastr_download.py wind solar storage storage_units market"
+# "storage" includes AnlagenStromSpeicher (usable energy) since open-mastr 1.0.
+db-mastr-core    = "python scripts/mastr_download.py wind solar storage market"
 db-mastr-all     = "python scripts/mastr_download.py"
 
 # One-shot migration of an existing open-mastr.db to the parquet store.
@@ -89,8 +88,7 @@ python fetch_mastr.py \
   --per-page --out-dir data-bess
 """
 
-# Build BNetzA_MaStR/full-storage.parquet: Zenodo base (2025-02-09) + API delta.
-# Run after scrape-bess or independently for the bulk choropleth path.
+# Build BNetzA_MaStR/full-storage.parquet from the parquet store's storage table.
 build-full-bess = "python scripts/build_full_bess.py"
 
 # Build germany_kreise.gpkg from BKG VG2500 (1:2.5M Verwaltungsgebiete,

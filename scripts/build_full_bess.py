@@ -1,18 +1,17 @@
-"""Build BNetzA_MaStR/full-storage.parquet from the open-mastr SQLite snapshot.
+"""Build BNetzA_MaStR/full-storage.parquet from the MaStR parquet store.
 
 Previous pipeline (Zenodo base + MaStR JSON API delta) is superseded by the
-daily-fresh open-mastr bulk dump at data/mastr/open-mastr.db. This script now
-just projects the SQLite storage_extended table through the pipeline column
-contract (mastr_db.load_for_pipeline) and writes it as zstd-Parquet so legacy
-callers + CI artefact uploads keep working.
+daily-fresh open-mastr bulk export. This script projects the store's
+EinheitenStromSpeicher table through the pipeline column contract
+(mastr_parquet.load_for_pipeline) and writes it as one zstd parquet file so
+legacy callers keep working.
 
-Run after refreshing the DB:
+Run after refreshing the store:
     pixi run db-mastr-storage  # or db-mastr-core for wind+solar+storage+market
     pixi run build-full-bess
 
-The on-disk parquet is no longer required by mastr_plot.load_from_bulk when
-source="auto"/"sqlite" — load_from_bulk reads the SQLite directly. The parquet
-is kept as a portable artefact (smaller, single-file, no SQLAlchemy dep).
+mastr_plot.load_from_bulk does not need this file: it reads the store directly.
+It is kept as a portable single-file artefact.
 """
 
 from __future__ import annotations
@@ -22,20 +21,22 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import mastr_db  # noqa: E402
+import mastr_parquet  # noqa: E402
 
 BULK = Path(__file__).resolve().parent.parent / "BNetzA_MaStR"
 OUT = BULK / "full-storage.parquet"
 
 
 def main() -> None:
-    if not mastr_db.DB_PATH.exists():
+    storage_table = mastr_db.EXTENDED_TABLES["storage"]
+    if storage_table not in mastr_parquet.available_tables():
         sys.exit(
-            f"open-mastr DB not found at {mastr_db.DB_PATH}. "
+            f"{storage_table}.parquet not found in {mastr_parquet.PARQUET_DIR}. "
             "Run `pixi run db-mastr-storage` (or db-mastr-core) first."
         )
 
-    print(f"Loading bess from {mastr_db.DB_PATH} ...")
-    df = mastr_db.load_for_pipeline("bess")
+    print(f"Loading bess from {mastr_parquet.PARQUET_DIR} ...")
+    df = mastr_parquet.load_for_pipeline("bess")
 
     BULK.mkdir(parents=True, exist_ok=True)
     df.to_parquet(OUT, compression="zstd", index=False)

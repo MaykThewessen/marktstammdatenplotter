@@ -1,6 +1,7 @@
 """Parquet store for the Marktstammdatenregister bulk snapshot.
 
-Same data as the open-mastr SQLite DB, one zstd parquet file per table, read
+Same data as the open-mastr SQLite DB, one zstd parquet file per table named
+after the BNetzA table (EinheitenWind.parquet, Marktakteure.parquet, ...), read
 through DuckDB. Measured on the 2026-06-16 export (34 tables, 38.0 M rows):
 
     SQLite           11.32 GB    PV pipeline load 107 s
@@ -30,6 +31,7 @@ from pathlib import Path
 import duckdb
 import geopandas as gpd
 import pandas as pd
+import sqlalchemy as sa
 
 import mastr_db
 
@@ -65,59 +67,67 @@ def _lit(value: object) -> str:
     return "'" + str(value).replace("'", "''") + "'"
 
 
-# open-mastr's SQLAlchemy type -> (DuckDB cast, pandas dtype). SQLite has no
-# date or boolean type, so it stores those as TEXT and INTEGER 0/1; parquet
-# does have them. Normalising from the ORM in both population paths keeps the
-# store's schema independent of how it was built.
+# SQLAlchemy type -> (DuckDB cast, pandas dtype). SQLite has no date or boolean
+# type, so it stores those as TEXT and INTEGER 0/1; parquet does have them.
+# Normalising from the table schema in both population paths keeps the store's
+# schema independent of how it was built.
+# Matched with isinstance, first hit wins: open-mastr's CatalogString and
+# CatalogInteger subclass String and Integer, and reflected SQLite types
+# (VARCHAR, DATE, BOOLEAN, ...) subclass the generic ones.
 # Microseconds, not nanoseconds: MaStR carries dates as far back as year 0100
-# (market_actors.Taetigkeitsbeginn), which overflows the pandas ns range of
+# (Marktakteure.Taetigkeitsbeginn), which overflows the pandas ns range of
 # 1677-2262 and made mixed-precision parts fail to merge. us also matches the
-# us truncation open-mastr's SQLite writer applied via strftime.
-_ORM_TYPE_MAP = {
-    "String":   ("VARCHAR",   "string"),
-    "Integer":  ("BIGINT",    "Int64"),
-    "Float":    ("DOUBLE",    "float64"),
-    "Boolean":  ("BOOLEAN",   "boolean"),
-    "Date":     ("DATE",      "datetime64[us]"),
-    "DateTime": ("TIMESTAMP", "datetime64[us]"),
-}
+# us truncation open-mastr's SQLite writer applies via strftime.
+# DateTime stays a naive TIMESTAMP even where open-mastr declares
+# timezone=True: the XML carries naive local times and the writer never
+# attaches a zone, so labelling them UTC would shift nothing and claim a zone
+# the data does not have.
+_TYPE_MAP: tuple[tuple[type[sa.types.TypeEngine], tuple[str, str]], ...] = (
+    (sa.Boolean,  ("BOOLEAN",   "boolean")),
+    (sa.Integer,  ("BIGINT",    "Int64")),
+    (sa.Float,    ("DOUBLE",    "float64")),
+    (sa.DateTime, ("TIMESTAMP", "datetime64[us]")),
+    (sa.Date,     ("DATE",      "datetime64[us]")),
+    (sa.String,   ("VARCHAR",   "string")),
+)
 
 
-def orm_dtypes(table: str) -> dict[str, tuple[str, str]]:
-    """{column: (duckdb_cast, pandas_dtype)} from open-mastr's ORM for `table`.
+def column_types(table: sa.Table) -> dict[str, tuple[str, str]]:
+    """{column: (duckdb_cast, pandas_dtype)} for the columns of `table`.
 
-    Imported lazily so that *reading* the store never requires open-mastr —
-    only the two paths that populate it do.
+    `table` is open-mastr's XSD-generated Table (download path) or one reflected
+    from a SQLite DB (conversion path). Columns of an unmapped type are left
+    out, so they pass through uncast.
     """
-    from open_mastr.utils.orm import tablename_mapping
-
-    for entry in tablename_mapping.values():
-        cls = entry.get("__class__") if isinstance(entry, dict) else None
-        if cls is None or cls.__table__.name != table:
-            continue
-        return {
-            col.name: _ORM_TYPE_MAP[type(col.type).__name__]
-            for col in cls.__table__.columns
-            if type(col.type).__name__ in _ORM_TYPE_MAP
-        }
-    return {}
+    types = {}
+    for col in table.columns:
+        for sa_type, mapped in _TYPE_MAP:
+            if isinstance(col.type, sa_type):
+                types[col.name] = mapped
+                break
+    return types
 
 
-def orm_primary_key(table: str) -> str | None:
-    """Primary-key column for `table`, or None if the ORM does not define one.
+def is_surrogate_key(column: sa.Column) -> bool:
+    """True for the integer id open-mastr inserts when BNetzA defines no key.
+
+    Every column generated from the XSD carries `info["original_name"]`; the
+    inserted `OpenMastrId` does not. SQLite fills it on INSERT, while the XML
+    never carries it, so in parquet it would be all NULL.
+    """
+    return column.primary_key and "original_name" not in column.info
+
+
+def primary_key(table: sa.Table) -> list[str]:
+    """Natural primary-key columns of an XSD-generated `table`.
 
     Used to reproduce SQLite's `INSERT ... ON CONFLICT DO NOTHING` dedup when
-    writing parquet, which has no constraints of its own.
+    writing parquet, which has no constraints of its own. Empty for a table
+    keyed only by a surrogate id: SQLite hands every row a fresh id there, so
+    nothing ever conflicts, and partitioning by an all-NULL column would
+    collapse the whole table into one row.
     """
-    from open_mastr.utils.orm import tablename_mapping
-
-    for entry in tablename_mapping.values():
-        cls = entry.get("__class__") if isinstance(entry, dict) else None
-        if cls is None or cls.__table__.name != table:
-            continue
-        pks = [c.name for c in cls.__table__.primary_key.columns]
-        return pks[0] if len(pks) == 1 else None
-    return None
+    return [c.name for c in table.primary_key.columns if not is_surrogate_key(c)]
 
 
 def table_path(table: str, parquet_dir: Path | None = None) -> Path:
@@ -220,21 +230,26 @@ def load_for_pipeline(
         raise ValueError(f"unknown tech {tech!r}; expected wind|pv|bess")
 
     with connect(parquet_dir) as con:
-        tables = {t.lower() for t in available_tables(parquet_dir)}
-        if "market_actors" not in tables:
+        tables = set(available_tables(parquet_dir))
+        if mastr_db.MARKET_ACTORS_TABLE not in tables:
             raise RuntimeError(
-                "market_actors.parquet missing; the owner_name JOIN would be NULL "
-                "for every row. Re-run the download including the market table."
+                f"{mastr_db.MARKET_ACTORS_TABLE}.parquet missing; the owner_name "
+                "JOIN would be NULL for every row. Re-run the download including "
+                "the market table."
             )
-        n_actors = con.execute("SELECT COUNT(*) FROM market_actors").fetchone()[0]
+        n_actors = con.execute(
+            f'SELECT COUNT(*) FROM "{mastr_db.MARKET_ACTORS_TABLE}"'
+        ).fetchone()[0]
         if int(n_actors) == 0:
             raise RuntimeError(
-                "market_actors is empty; owner_name JOIN would be NULL for every "
-                "row. Run `pixi run db-mastr-market` to populate it."
+                f"{mastr_db.MARKET_ACTORS_TABLE} is empty; owner_name JOIN would be "
+                "NULL for every row. Run `pixi run db-mastr-market` to populate it."
             )
         storage_units_available = tech != "bess" or (
-            "storage_units" in tables
-            and int(con.execute("SELECT COUNT(*) FROM storage_units").fetchone()[0]) > 0
+            mastr_db.STORAGE_UNITS_TABLE in tables
+            and int(con.execute(
+                f'SELECT COUNT(*) FROM "{mastr_db.STORAGE_UNITS_TABLE}"'
+            ).fetchone()[0]) > 0
         )
         sql = mastr_db.pipeline_sql(
             tech, storage_units_available=storage_units_available
@@ -257,19 +272,19 @@ PARTS_SUBDIR = "_parts"
 _PART_SEQ = "_part_seq"
 
 
-def _orm_projection(
+def _typed_projection(
     con: duckdb.DuckDBPyConnection,
     from_expr: str,
-    table: str,
+    table: sa.Table,
     exclude: tuple[str, ...] = (),
 ) -> str:
-    """Select list over `from_expr` with ORM types restored.
+    """Select list over `from_expr` with the types of `table` restored.
 
-    Columns the ORM does not declare pass through unchanged, so extra columns
-    the XML carries beyond the ORM survive.
+    Columns `table` does not declare pass through unchanged, so extra columns
+    the XML carries beyond the XSD survive.
     """
     cols = [r[0] for r in con.execute(f"DESCRIBE SELECT * FROM {from_expr}").fetchall()]
-    dtypes = orm_dtypes(table)
+    dtypes = column_types(table)
     parts = []
     for c in cols:
         if c in exclude or c == "_rn":
@@ -303,38 +318,39 @@ def write_part(
 
 
 def finalise_table(
-    table: str,
+    table: sa.Table,
     parquet_dir: Path | None = None,
     compression_level: int = COMPRESSION_LEVEL,
 ) -> int:
     """Merge a table's parts into one deduplicated zstd parquet file.
 
     Returns the row count written. `union_by_name` covers parts with different
-    column subsets (open-mastr adds columns to the SQLite table as it discovers
-    them, so later XML files can carry columns the first ones lacked). Removes
-    the parts directory on success.
+    column subsets (later XML files can carry columns the first ones lacked).
+    Removes the parts directory on success.
     """
-    d = parts_dir(table, parquet_dir)
+    d = parts_dir(table.name, parquet_dir)
     parts = sorted(d.glob("part-*.parquet"))
     if not parts:
         return 0
     out = parquet_dir or PARQUET_DIR
     out.mkdir(parents=True, exist_ok=True)
-    dst = table_path(table, out)
+    dst = table_path(table.name, out)
 
     src = (f"read_parquet([{', '.join(_lit(p) for p in parts)}], "
            "union_by_name=true)")
-    pk = orm_primary_key(table)
+    pk = primary_key(table)
 
     con = duckdb.connect()
     con.execute("SET TimeZone='UTC'")
-    # Restore ORM types on the merged result so a directly-written store has the
-    # same schema as a converted one (parts carry Date columns as us timestamps
-    # because pandas has no date dtype; DuckDB narrows them back to DATE here).
-    projection = _orm_projection(con, src, table, exclude=(_PART_SEQ,))
+    # Restore the table's types on the merged result so a directly-written store
+    # has the same schema as a converted one (parts carry Date columns as us
+    # timestamps because pandas has no date dtype; DuckDB narrows them back to
+    # DATE here).
+    projection = _typed_projection(con, src, table, exclude=(_PART_SEQ,))
     if pk:
-        inner = (f'SELECT *, row_number() OVER (PARTITION BY "{pk}" '
-                 f'ORDER BY {_PART_SEQ}) AS _rn FROM {src}')
+        partition = ", ".join(f'"{c}"' for c in pk)
+        inner = (f"SELECT *, row_number() OVER (PARTITION BY {partition} "
+                 f"ORDER BY {_PART_SEQ}) AS _rn FROM {src}")
         query = f"SELECT {projection} FROM ({inner}) WHERE _rn = 1"
     else:
         query = f"SELECT {projection} FROM {src}"
@@ -376,22 +392,24 @@ def convert_from_sqlite(
     out = parquet_dir or REPO_DIR
     out.mkdir(parents=True, exist_ok=True)
 
+    # Reflect for the declared column types. views=False skips the pre-1.0
+    # compatibility views (wind_extended, ...) open-mastr creates over the
+    # tables, which would otherwise be exported a second time under old names.
+    metadata = sa.MetaData()
+    metadata.reflect(sa.create_engine(f"sqlite:///{src}"), views=False)
+
     written: dict[str, int] = {}
     con = duckdb.connect()
     con.execute("SET TimeZone='UTC'")
     con.execute("INSTALL sqlite; LOAD sqlite")
     con.execute(f"ATTACH {_lit(src)} AS s (TYPE sqlite, READ_ONLY)")
     try:
-        tables = [r[0] for r in con.execute(
-            "SELECT table_name FROM information_schema.tables "
-            "WHERE table_catalog = 's' ORDER BY table_name"
-        ).fetchall()]
-        for t in tables:
+        for t, table in sorted(metadata.tables.items()):
             dst = table_path(t, out)
             # SQLite stores DATE as TEXT and BOOLEAN as INTEGER 0/1; the same
-            # ORM projection used by finalise_table restores the real types, so
-            # a converted store and a directly-written one share one schema.
-            projection = _orm_projection(con, f's."{t}"', t)
+            # projection used by finalise_table restores the real types, so a
+            # converted store and a directly-written one share one schema.
+            projection = _typed_projection(con, f's."{t}"', table)
             con.execute(
                 f'COPY (SELECT {projection} FROM s."{t}") TO {_lit(dst)} '
                 f"(FORMAT parquet, COMPRESSION zstd, COMPRESSION_LEVEL {int(compression_level)})"

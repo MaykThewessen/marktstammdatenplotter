@@ -6,9 +6,9 @@ satisfies the column contract consumed by mastr_plot.load_from_bulk, and that
 aggregate capacity / row counts land in plausible ranges for the live German
 registry.
 
-The tests skip when the SQLite DB or market_actors table is missing — typical
-in fresh checkouts where `pixi run db-mastr-core && pixi run db-mastr-market`
-hasn't run yet. Run those once locally to enable the suite.
+The tests skip when the SQLite DB or the Marktakteure table is missing, as in
+fresh checkouts. `pixi run db-mastr-core --sqlite` writes that DB; run it once
+locally to enable the suite.
 """
 
 from __future__ import annotations
@@ -25,15 +25,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import mastr_db  # noqa: E402
 
 # ---------------------------------------------------------------------------
-# Skip the whole module if the DB or market_actors are missing — these tests
-# are integration-level and require a populated SQLite snapshot.
+# Skip the whole module if the DB or Marktakteure are missing. These tests are
+# integration-level and require a populated SQLite snapshot.
 # ---------------------------------------------------------------------------
 
 _DB_OK = mastr_db.DB_PATH.exists()
 if _DB_OK:
     try:
         _MARKET_ROWS = pd.read_sql(
-            "SELECT COUNT(*) AS n FROM market_actors",
+            f'SELECT COUNT(*) AS n FROM "{mastr_db.MARKET_ACTORS_TABLE}"',
             con=mastr_db.engine(),
         ).iloc[0, 0]
     except Exception:
@@ -44,8 +44,8 @@ else:
 pytestmark = pytest.mark.skipif(
     not _DB_OK or _MARKET_ROWS == 0,
     reason=(
-        "open-mastr SQLite or market_actors not populated. Run "
-        "`pixi run db-mastr-core && pixi run db-mastr-market` to enable."
+        "open-mastr SQLite or Marktakteure not populated. Run "
+        "`pixi run db-mastr-core --sqlite` to enable."
     ),
 )
 
@@ -222,7 +222,7 @@ class TestMarketActorsJoin:
         non_null = wind_df["owner_name"].notna().sum()
         assert non_null / len(wind_df) >= 0.40, (
             f"wind owner_name JOIN coverage {non_null}/{len(wind_df)} "
-            f"({100*non_null/len(wind_df):.1f}%); market_actors likely incomplete"
+            f"({100*non_null/len(wind_df):.1f}%); Marktakteure likely incomplete"
         )
 
     def test_strict_mode_raises_when_market_empty(self, monkeypatch) -> None:
@@ -232,5 +232,5 @@ class TestMarketActorsJoin:
             return pd.DataFrame({"n": [0]})
 
         monkeypatch.setattr(mastr_db.pd, "read_sql", fake_read_sql)
-        with pytest.raises(RuntimeError, match="market_actors table is empty"):
+        with pytest.raises(RuntimeError, match="Marktakteure table is empty"):
             mastr_db.load_for_pipeline("wind")

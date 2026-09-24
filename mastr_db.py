@@ -2,9 +2,10 @@
 Thin loader for the open-mastr SQLite snapshot of the Marktstammdatenregister.
 
 The open-mastr package downloads MaStR's bulk XML export into a SQLite DB at
-$HOME/.open-MaStR/data/sqlite/open-mastr.db. Tables of interest here are
-wind_extended, solar_extended, storage_extended — all rendered as pandas
-DataFrames (or GeoDataFrames in EPSG:4326 if coordinates are present).
+$HOME/.open-MaStR/data/sqlite/open-mastr.db. Since open-mastr 1.0 tables carry
+the original BNetzA names; the ones of interest here are EinheitenWind,
+EinheitenSolar and EinheitenStromSpeicher, all rendered as pandas DataFrames
+(or GeoDataFrames in EPSG:4326 if coordinates are present).
 
 Refresh the DB with one of the pixi tasks (e.g. `pixi run db-mastr-core`)
 or directly: `python -c "from open_mastr import Mastr; Mastr().download()"`.
@@ -28,12 +29,16 @@ _HOME_DB = Path.home() / ".open-MaStR" / "data" / "sqlite" / "open-mastr.db"
 DB_PATH = _REPO_DB if _REPO_DB.exists() else _HOME_DB
 
 EXTENDED_TABLES = {
-    "wind":    "wind_extended",
-    "solar":   "solar_extended",
-    "storage": "storage_extended",
-    "hydro":   "hydro_extended",
-    "biomass": "biomass_extended",
+    "wind":    "EinheitenWind",
+    "solar":   "EinheitenSolar",
+    "storage": "EinheitenStromSpeicher",
+    "hydro":   "EinheitenWasser",
+    "biomass": "EinheitenBiomasse",
 }
+# Owner names for the pipeline's owner_name JOIN.
+MARKET_ACTORS_TABLE = "Marktakteure"
+# Storage installations: the only table that carries NutzbareSpeicherkapazitaet.
+STORAGE_UNITS_TABLE = "AnlagenStromSpeicher"
 
 # Date columns load() parses to datetime. Only the ones actually present in the
 # result are converted (see _parse_date_cols) — passing absent names to
@@ -140,10 +145,11 @@ def count(tech: str, db_path: Path = DB_PATH) -> int:
 #   - "Großparkplatz" (~93 rows in Zenodo, 0.002 % of registry)
 #   - "Gewässer"      (~33 rows)
 # Both end up tagged "Bauliche Anlagen (Sonstige)" → installation_type
-# "building_other". The raw `Lage` column exists in open-mastr's solar_extended
-# schema but is NULL for all 6.1 M rows — open-mastr does not preserve the
-# Zenodo CSV's finer granularity. Use `load_from_bulk(source="zenodo")` if you
-# need the parking-lot / water distinction.
+# "building_other". The BNetzA XSD behind open-mastr 1.0 has no `Lage` column
+# for EinheitenSolar at all (0.17's hand-written schema had one, NULL for all
+# 6.1 M rows), so the finer granularity of the Zenodo CSV is not available here.
+# Use `load_from_bulk(source="zenodo")` if you need the parking-lot / water
+# distinction.
 _PV_ART_TO_LOCATION = {
     "Gebäudesolaranlage":                                "Bauliche Anlagen (Hausdach, Gebäude und Fassade)",
     "Freiflächensolaranlage":                            "Freifläche",
@@ -224,15 +230,15 @@ def _backfill_psh_energy_from_zenodo(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _ensure_market_actors(db_path: Path) -> None:
-    """Strict-mode owner_name guard. Raises if market_actors is empty so
+    """Strict-mode owner_name guard. Raises if Marktakteure is empty so
     callers get a clear diagnosis instead of silent NULL owner_name."""
     n = pd.read_sql(
-        "SELECT COUNT(*) AS n FROM market_actors", con=engine(db_path),
+        f'SELECT COUNT(*) AS n FROM "{MARKET_ACTORS_TABLE}"', con=engine(db_path),
     ).iloc[0, 0]
     if int(n) == 0:
         raise RuntimeError(
-            "market_actors table is empty; owner_name JOIN would be NULL for "
-            "every row. Run `pixi run db-mastr-market` to populate it."
+            f"{MARKET_ACTORS_TABLE} table is empty; owner_name JOIN would be NULL "
+            "for every row. Run `pixi run db-mastr-market` to populate it."
         )
 
 
@@ -245,15 +251,16 @@ def pipeline_sql(tech: str, *, storage_units_available: bool = True) -> str:
     what makes the two backends provably equivalent.
 
     storage_units_available: BESS only. `NutzbareSpeicherkapazitaet` sits in
-    `storage_units` (one-to-one with storage_extended via VerknuepfteEinheit),
-    NOT in storage_extended where the column is always NULL. Pass False to
-    skip the JOIN when that table is absent or empty (e.g. a fresh download of
-    only `data=['storage']`).
+    AnlagenStromSpeicher (one-to-one with EinheitenStromSpeicher via
+    VerknuepfteEinheitenMastrNummern); EinheitenStromSpeicher has no such
+    column. Pass False to skip the JOIN when that table is absent or empty.
     """
     if tech not in ("wind", "pv", "bess"):
         raise ValueError(f"unknown tech {tech!r}; expected wind|pv|bess")
 
     common = ",\n    ".join(f"e.{c}" for c in _PIPELINE_COMMON_COLS)
+    actors_join = (f'LEFT JOIN "{MARKET_ACTORS_TABLE}" m '
+                   "ON m.MastrNummer = e.AnlagenbetreiberMastrNummer")
 
     if tech == "wind":
         return f"""
@@ -264,8 +271,8 @@ def pipeline_sql(tech: str, *, storage_units_available: bool = True) -> str:
             e.Seelage              AS seelage,
             m.Firmenname           AS owner_name,
             e.NameWindpark         AS wind_park
-        FROM wind_extended e
-        LEFT JOIN market_actors m ON m.MastrNummer = e.AnlagenbetreiberMastrNummer
+        FROM "{EXTENDED_TABLES['wind']}" e
+        {actors_join}
         """
     if tech == "pv":
         return f"""
@@ -277,13 +284,13 @@ def pipeline_sql(tech: str, *, storage_units_available: bool = True) -> str:
             e.Hauptausrichtung               AS orientation,
             e.HauptausrichtungNeigungswinkel AS neigung_raw,
             m.Firmenname                     AS owner_name
-        FROM solar_extended e
-        LEFT JOIN market_actors m ON m.MastrNummer = e.AnlagenbetreiberMastrNummer
+        FROM "{EXTENDED_TABLES['solar']}" e
+        {actors_join}
         """
     if storage_units_available:
         energy_select = "su.NutzbareSpeicherkapazitaet AS usable_capacity_kwh"
-        energy_join = ("LEFT JOIN storage_units su "
-                       "ON su.VerknuepfteEinheit = e.EinheitMastrNummer")
+        energy_join = (f'LEFT JOIN "{STORAGE_UNITS_TABLE}" su '
+                       "ON su.VerknuepfteEinheitenMastrNummern = e.EinheitMastrNummer")
     else:
         energy_select = "NULL AS usable_capacity_kwh"
         energy_join = ""
@@ -294,8 +301,8 @@ def pipeline_sql(tech: str, *, storage_units_available: bool = True) -> str:
         e.GeplantesInbetriebnahmedatum AS planned_commissioning_date,
         e.Technologie                  AS storage_technology,
         m.Firmenname                   AS owner_name
-    FROM storage_extended e
-    LEFT JOIN market_actors m ON m.MastrNummer = e.AnlagenbetreiberMastrNummer
+    FROM "{EXTENDED_TABLES['storage']}" e
+    {actors_join}
     {energy_join}
     """
 
@@ -346,7 +353,7 @@ def load_for_pipeline(
 
     Returns a DataFrame with columns that match the bulk-parquet schema, so
     downstream rename + decoration in load_from_bulk works unchanged. Strict
-    mode: raises if market_actors is empty (owner_name JOIN would be all NULL).
+    mode: raises if Marktakteure is empty (owner_name JOIN would be all NULL).
 
     Prefer `mastr_parquet.load_for_pipeline` where the parquet store exists —
     same frame, ~20-30x faster (the 11 GB row-store pages through all 96
@@ -359,7 +366,9 @@ def load_for_pipeline(
     eng = engine(db_path)
 
     storage_units_available = tech != "bess" or (
-        pd.read_sql("SELECT COUNT(*) AS n FROM storage_units", con=eng).iloc[0, 0] > 0
+        pd.read_sql(
+            f'SELECT COUNT(*) AS n FROM "{STORAGE_UNITS_TABLE}"', con=eng
+        ).iloc[0, 0] > 0
     )
     sql = pipeline_sql(tech, storage_units_available=storage_units_available)
     df = pd.read_sql(sql, con=eng)
