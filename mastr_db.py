@@ -250,6 +250,10 @@ def pipeline_sql(tech: str, *, storage_units_available: bool = True) -> str:
     parquet store (see `mastr_parquet.connect`). Keeping one copy of the SQL is
     what makes the two backends provably equivalent.
 
+    Rows come back ordered by mastr_id. Without ORDER BY the order is whatever
+    the store's physical layout yields, and downstream rankings break ties by
+    row order, so a rebuilt store could swap equal-capacity plants in a chart.
+
     storage_units_available: BESS only. `NutzbareSpeicherkapazitaet` sits in
     AnlagenStromSpeicher (one-to-one with EinheitenStromSpeicher via
     VerknuepfteEinheitenMastrNummern); EinheitenStromSpeicher has no such
@@ -261,6 +265,7 @@ def pipeline_sql(tech: str, *, storage_units_available: bool = True) -> str:
     common = ",\n    ".join(f"e.{c}" for c in _PIPELINE_COMMON_COLS)
     actors_join = (f'LEFT JOIN "{MARKET_ACTORS_TABLE}" m '
                    "ON m.MastrNummer = e.AnlagenbetreiberMastrNummer")
+    order = "ORDER BY e.EinheitMastrNummer"
 
     if tech == "wind":
         return f"""
@@ -273,6 +278,7 @@ def pipeline_sql(tech: str, *, storage_units_available: bool = True) -> str:
             e.NameWindpark         AS wind_park
         FROM "{EXTENDED_TABLES['wind']}" e
         {actors_join}
+        {order}
         """
     if tech == "pv":
         return f"""
@@ -286,6 +292,7 @@ def pipeline_sql(tech: str, *, storage_units_available: bool = True) -> str:
             m.Firmenname                     AS owner_name
         FROM "{EXTENDED_TABLES['solar']}" e
         {actors_join}
+        {order}
         """
     if storage_units_available:
         energy_select = "su.NutzbareSpeicherkapazitaet AS usable_capacity_kwh"
@@ -304,6 +311,7 @@ def pipeline_sql(tech: str, *, storage_units_available: bool = True) -> str:
     FROM "{EXTENDED_TABLES['storage']}" e
     {actors_join}
     {energy_join}
+    {order}
     """
 
 

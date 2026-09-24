@@ -93,6 +93,13 @@ class TestPipelineContract:
         assert {"mastr_id", "gross_capacity_kw", "commissioning_date",
                 "owner_name"} <= set(df.columns)
 
+    @pytest.mark.parametrize("tech", ["wind", "bess"])
+    def test_rows_ordered_by_mastr_id(self, tech: str) -> None:
+        """Downstream rankings break ties by row order, so it must not depend on
+        the store's physical layout."""
+        ids = mastr_parquet.load_for_pipeline(tech)["mastr_id"]
+        assert ids.is_monotonic_increasing and ids.is_unique
+
     def test_owner_name_is_populated(self) -> None:
         """Guards the Marktakteure JOIN: a wrong key silently yields all-NULL."""
         df = mastr_parquet.load_for_pipeline("wind")
