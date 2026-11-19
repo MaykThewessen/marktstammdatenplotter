@@ -34,6 +34,15 @@ All notable changes to this project. Follows
 - `duckdb` dependency.
 
 ### Changed
+- **open-mastr 1.0.0 to 1.1.0.** `scripts/mastr_download.py` re-ports its
+  byte-driven copy of `partial_download_with_unzip_http` onto upstream's
+  atomic partial download (PR #843): members land in `<zip>.part`, a member
+  shorter than the remote one raises `OSError`, and the cached zip is replaced
+  only on success. The `MB` relabel of the full-download bar is gone: chunks
+  vary in size, so it never showed MB/s (fixed upstream in PR #852).
+  Multi-value catalog columns are now joined with `|` instead of `,`
+  (PRs #819/#821); a store built with 1.0 holds ambiguous values such as
+  `"Heizöl, leicht,Erdgas, Erdölgas"` until it is rebuilt.
 - **open-mastr 0.17.4 → 1.0.0.** Tables now carry the original BNetzA names
   (`EinheitenWind`, `EinheitenSolar`, `EinheitenStromSpeicher`,
   `AnlagenStromSpeicher`, `Marktakteure`) and the schema comes from BNetzA's XSD

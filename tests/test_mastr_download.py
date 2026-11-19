@@ -1,4 +1,5 @@
-"""Unit tests for the parquet writer behind scripts/mastr_download.py.
+"""Unit tests for the parquet writer and the partial download behind
+scripts/mastr_download.py.
 
 Synthetic tables only: no network, no MaStR export and no parquet store needed.
 The store-level tests in test_parquet_store.py cover the real data.
@@ -8,7 +9,9 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import duckdb
 import pandas as pd
@@ -246,3 +249,76 @@ class TestWriterFailures:
         with pytest.raises(SystemExit, match=r"(?s)1 error.*EinheitenWind_1.xml.*disk full"):
             dl.main()
         assert not mastr_parquet.table_path("EinheitenWind").exists()
+
+
+class _FakeRemoteZip:
+    """Stands in for unzip_http.RemoteZipFile: a central directory of members,
+    and an extractzip that appends each member to a local zip as upstream's
+    does. ``short`` members arrive cut off, as after a dropped connection."""
+
+    def __init__(self, members: dict[str, bytes], short: set[str] = frozenset()) -> None:
+        self.members = members
+        self.short = short
+        self.files = {
+            name: SimpleNamespace(file_size=len(data), compress_size=len(data))
+            for name, data in members.items()
+        }
+
+    def namelist(self) -> list[str]:
+        return list(self.members)
+
+    def extractzip(self, member: str, path: Path) -> None:
+        data = self.members[member]
+        with zipfile.ZipFile(path, "a") as zf:
+            zf.writestr(member, data[: len(data) // 2] if member in self.short else data)
+
+
+_REMOTE_MEMBERS = {
+    "EinheitenWind_1.xml": b"<wind/>" * 100,
+    "Katalogwerte.xml": b"<katalog/>" * 100,
+}
+
+
+class TestPartialDownload:
+    """The byte-bar copy of open-mastr 1.1.0's partial_download_with_unzip_http
+    must keep upstream's atomic append (PR #843)."""
+
+    def _download(
+        self, monkeypatch: pytest.MonkeyPatch, save_path: Path, remote: _FakeRemoteZip
+    ) -> None:
+        dl = _load_downloader()
+        monkeypatch.setattr(dl._bulk.unzip_http, "RemoteZipFile", lambda url: remote)
+        dl._partial_download_with_progress(
+            str(save_path), "https://example.invalid/x.zip", {"einheitenwind", "katalogwerte"}
+        )
+
+    def _cached_zip(self, tmp_path: Path) -> tuple[Path, bytes]:
+        """A zip an earlier partial download left behind."""
+        save_path = tmp_path / "Gesamtdatenexport.zip"
+        with zipfile.ZipFile(save_path, "w") as zf:
+            zf.writestr("EinheitenSolar_1.xml", b"<solar/>")
+        return save_path, save_path.read_bytes()
+
+    def test_members_are_appended_to_the_cached_zip(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        save_path, _ = self._cached_zip(tmp_path)
+        self._download(monkeypatch, save_path, _FakeRemoteZip(_REMOTE_MEMBERS))
+
+        with zipfile.ZipFile(save_path) as zf:
+            assert sorted(zf.namelist()) == sorted(["EinheitenSolar_1.xml", *_REMOTE_MEMBERS])
+            assert zf.read("Katalogwerte.xml") == _REMOTE_MEMBERS["Katalogwerte.xml"]
+        assert not Path(f"{save_path}.part").exists()
+
+    def test_truncated_member_raises_and_keeps_the_cached_zip(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A truncated member still closes into a valid zip, so only the size
+        check stops it from being parsed as complete."""
+        save_path, before = self._cached_zip(tmp_path)
+        remote = _FakeRemoteZip(_REMOTE_MEMBERS, short={"EinheitenWind_1.xml"})
+
+        with pytest.raises(OSError, match="Incomplete download of.*EinheitenWind_1.xml"):
+            self._download(monkeypatch, save_path, remote)
+        assert save_path.read_bytes() == before
+        assert not Path(f"{save_path}.part").exists()

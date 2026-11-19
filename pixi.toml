@@ -24,16 +24,17 @@ ffmpeg      = "*"
 requests    = "*"
 duckdb = ">=1.5.5,<2"
 
-# open-mastr is PyPI-only (not on conda-forge as of v1.0.0).
-# scripts/mastr_download.py patches its 1.x writer functions, so a major bump
-# needs a port, not just a lockfile update.
+# open-mastr is PyPI-only (not on conda-forge as of v1.1.0).
+# scripts/mastr_download.py patches its 1.x writer functions and copies its
+# partial-download function. Pinned to one minor so that a bump forces a
+# re-check of both, not just a lockfile update.
 [pypi-dependencies]
-open-mastr = ">=1,<2"
+open-mastr = ">=1.1,<1.2"
 
 [tasks]
 # Bulk download of MaStR into the parquet store at data/mastr/parquet/.
 # Single-tech variants avoid the multi-GB full pull.
-# Wrapper relabels open-mastr's tqdm bar so the rate shows MB/s next to the ETA,
+# Wrapper drives the subset download's progress bar by bytes (MB/s, byte ETA),
 # and redirects open-mastr's SQL writer to parquet so the 11 GB SQLite is never
 # created (measured: 11.32 GB SQLite -> 1.30 GB parquet, same 38.0 M rows).
 # Append --sqlite to any of these for the legacy open-mastr.db path.
@@ -49,7 +50,7 @@ db-mastr-all     = "python scripts/mastr_download.py"
 # Leaves the SQLite file alone; delete it once you have verified the store.
 db-mastr-parquet = "python mastr_parquet.py"
 
-# One-shot scrapes — uses the README's curl recipes.
+# One-shot scrapes: uses the README's curl recipes.
 scrape-non-pv = """
 mkdir -p data && \
 for p in 1 2 3 4 5 6 7; do \
@@ -78,7 +79,7 @@ for p in 1 2 3 4 5 6 7 8; do \
 done; wait
 """
 
-# Battery + other electricity storage — top 200k units by installed power.
+# Battery + other electricity storage: top 200k units by installed power.
 # Covers grid-scale Pumpspeicher down to ~10 kW home batteries.
 # Resumable: existing page-NNN.json files are skipped automatically.
 scrape-bess = """
@@ -92,7 +93,7 @@ python fetch_mastr.py \
 build-full-bess = "python scripts/build_full_bess.py"
 
 # Build germany_kreise.gpkg from BKG VG2500 (1:2.5M Verwaltungsgebiete,
-# stand 31.12). Post-reform Landkreis names (~ 400 rows) — closes the
+# stand 31.12). Post-reform Landkreis names (~ 400 rows). This closes the
 # ~ 16 % name-match gap left by the pre-2007/2011 isellsoap GeoJSON.
 # Licence: Datenlizenz Deutschland Namensnennung 2.0 (dl-de/by-2-0),
 # attribution: "© GeoBasis-DE / BKG (2025)".
